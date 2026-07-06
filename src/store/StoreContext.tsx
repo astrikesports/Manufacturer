@@ -240,11 +240,29 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       await supabase.from('fabrics').update(fabricToDb(fabric)).eq('id', fabric.id);
       await supabase.from('fabric_colors').delete().eq('fabric_id', fabric.id);
     } else {
-      await supabase.from('fabrics').insert(fabricToDb(fabric));
-    }
-    if (fabric.colors.length > 0) {
-      await supabase.from('fabric_colors').insert(fabric.colors.map((c) => fabricColorToDb(c, fabric.id)));
-    }
+      const { data: newFabric, error } = await supabase
+        .from('fabrics')
+        .insert(fabricToDb(fabric))
+        .select()
+        .single();
+      
+      if (error) throw error;
+      
+      const fabricId = isEdit ? fabric.id : newFabric.id;
+      
+      if (fabric.colors.length > 0) {
+        await supabase
+          .from('fabric_colors')
+          .insert(
+            fabric.colors.map((c) => ({
+              fabric_id: fabricId,
+              name: c.name,
+              rolls: c.rolls,
+              stock: c.stock,
+              used: c.used,
+            }))
+          );
+      }
     setDataState((prev) => {
       const next = {
         ...prev,
@@ -738,7 +756,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     for (const lot of sample.lots) await saveLot(lot);
     await supabase.from('history_events').insert({ module: 'System', action: 'Create', description: 'Sample data loaded' });
     setDataState((prev) => {
-      const next = { ...prev, history: [{ id: uid('h_'), module: 'System', action: 'Create', description: 'Sample data loaded', timestamp: now() }, ...prev.history] };
+      const next = { ...prev, history: [{ module: 'System', action: 'Create', description: 'Sample data loaded', timestamp: now() }, ...prev.history] };
       dataRef.current = next;
       return next;
     });
