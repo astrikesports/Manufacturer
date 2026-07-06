@@ -206,8 +206,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const addHistory = useCallback(async (module: string, action: 'Create' | 'Edit' | 'Delete', description: string) => {
-    const row = { id: uid('h_'), module, action, description };
-    await supabase.from('history_events').insert(row);
+    const row = {
+      module,
+      action,
+      description
+    };
+    
+    const { data: inserted, error } = await supabase
+      .from("history_events")
+      .insert(row)
+      .select()
+      .single();
+    
+    if (error) throw error;
     setDataState((prev) => {
       const next = { ...prev, history: [{ ...row, timestamp: now() }, ...prev.history].slice(0, 200) };
       dataRef.current = next;
