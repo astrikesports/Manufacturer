@@ -246,41 +246,62 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // ── Fabric ─────────────────────────────────────────────────────────────────
 
   const saveFabric = useCallback(async (fabric: Fabric) => {
-    const isEdit = dataRef.current.fabrics.some((f) => f.id === fabric.id);
+  const isEdit = dataRef.current.fabrics.some((f) => f.id === fabric.id);
+
+  let savedFabric = fabric;
+
     if (isEdit) {
-      await supabase.from('fabrics').update(fabricToDb(fabric)).eq('id', fabric.id);
-      await supabase.from('fabric_colors').delete().eq('fabric_id', fabric.id);
+      await supabase
+        .from("fabrics")
+        .update(fabricToDb(fabric))
+        .eq("id", fabric.id);
+  
+      await supabase
+        .from("fabric_colors")
+        .delete()
+        .eq("fabric_id", fabric.id);
+  
     } else {
       const { data: newFabric, error } = await supabase
-        .from('fabrics')
+        .from("fabrics")
         .insert(fabricToDb(fabric))
         .select()
         .single();
-      
+  
       if (error) throw error;
-      
-      const fabricId = isEdit ? fabric.id : newFabric.id;
-      
-      if (fabric.colors.length > 0) {
-        await supabase
-          .from('fabric_colors')
-          .insert(
-            fabric.colors.map((c) => ({
-              fabric_id: fabricId,
-              name: c.name,
-              rolls: c.rolls,
-              stock: c.stock,
-              used: c.used,
-            }))
-          );
-      }
+  
+      savedFabric = {
+        ...fabric,
+        id: newFabric.id,
+      };
+    }
+  
+    if (savedFabric.colors.length > 0) {
+      const { error } = await supabase
+        .from("fabric_colors")
+        .insert(
+          savedFabric.colors.map((c) => ({
+            fabric_id: savedFabric.id,
+            name: c.name,
+            rolls: c.rolls,
+            stock: c.stock,
+            used: c.used,
+          }))
+        );
+  
+      if (error) throw error;
+    }
+  
     setDataState((prev) => {
       const next = {
         ...prev,
         fabrics: isEdit
-          ? prev.fabrics.map((f) => (f.id === fabric.id ? fabric : f))
-          : [...prev.fabrics, fabric],
+          ? prev.fabrics.map((f) =>
+              f.id === fabric.id ? savedFabric : f
+            )
+          : [...prev.fabrics, savedFabric],
       };
+  
       dataRef.current = next;
       return next;
     });
