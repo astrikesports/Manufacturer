@@ -1142,21 +1142,59 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const saveDispatchEntry = useCallback(async (entry: DispatchEntry) => {
     const isEdit = dataRef.current.dispatches.some((d) => d.id === entry.id);
+  
+    let savedEntry = entry;
+  
     if (isEdit) {
-      await supabase.from('dispatch_entries').update(dispatchEntryToDb(entry)).eq('id', entry.id);
-      await supabase.from('dispatch_boxes').delete().eq('dispatch_id', entry.id);
+      const { error } = await supabase
+        .from("dispatch_entries")
+        .update(dispatchEntryToDb(entry))
+        .eq("id", entry.id);
+  
+      if (error) throw error;
+  
+      const { error: deleteError } = await supabase
+        .from("dispatch_boxes")
+        .delete()
+        .eq("dispatch_id", entry.id);
+  
+      if (deleteError) throw deleteError;
+  
     } else {
-      await supabase.from('dispatch_entries').insert(dispatchEntryToDb(entry));
+      const { data: newEntry, error } = await supabase
+        .from("dispatch_entries")
+        .insert(dispatchEntryToDb(entry))
+        .select()
+        .single();
+  
+      if (error) throw error;
+  
+      savedEntry = {
+        ...entry,
+        id: newEntry.id,
+      };
     }
-    const dbRows = dispatchBoxesToDb(entry);
-    if (dbRows.length > 0) await supabase.from('dispatch_boxes').insert(dbRows);
+  
+    const dbRows = dispatchBoxesToDb(savedEntry);
+  
+    if (dbRows.length > 0) {
+      const { error } = await supabase
+        .from("dispatch_boxes")
+        .insert(dbRows);
+  
+      if (error) throw error;
+    }
+  
     setDataState((prev) => {
       const next = {
         ...prev,
         dispatches: isEdit
-          ? prev.dispatches.map((d) => (d.id === entry.id ? entry : d))
-          : [...prev.dispatches, entry],
+          ? prev.dispatches.map((d) =>
+              d.id === entry.id ? savedEntry : d
+            )
+          : [...prev.dispatches, savedEntry],
       };
+  
       dataRef.current = next;
       return next;
     });
