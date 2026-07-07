@@ -665,21 +665,59 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const saveCuttingEntry = useCallback(async (entry: CuttingEntry) => {
     const isEdit = dataRef.current.cuttings.some((c) => c.id === entry.id);
+  
+    let savedEntry = entry;
+  
     if (isEdit) {
-      await supabase.from('cutting_entries').update(cuttingEntryToDb(entry)).eq('id', entry.id);
-      await supabase.from('cutting_color_sizes').delete().eq('cutting_id', entry.id);
+      const { error } = await supabase
+        .from("cutting_entries")
+        .update(cuttingEntryToDb(entry))
+        .eq("id", entry.id);
+  
+      if (error) throw error;
+  
+      await supabase
+        .from("cutting_color_sizes")
+        .delete()
+        .eq("cutting_id", entry.id);
+  
     } else {
-      await supabase.from('cutting_entries').insert(cuttingEntryToDb(entry));
+      const { data: newEntry, error } = await supabase
+        .from("cutting_entries")
+        .insert(cuttingEntryToDb(entry))
+        .select()
+        .single();
+  
+      if (error) throw error;
+  
+      savedEntry = {
+        ...entry,
+        id: newEntry.id,
+      };
     }
-    const csRows = cuttingColorSizesToDb(entry);
-    if (csRows.length > 0) await supabase.from('cutting_color_sizes').insert(csRows);
+  
+    const csRows = cuttingColorSizesToDb(savedEntry);
+  
+    console.log("Cutting Rows", JSON.stringify(csRows, null, 2));
+  
+    if (csRows.length > 0) {
+      const { error } = await supabase
+        .from("cutting_color_sizes")
+        .insert(csRows);
+  
+      if (error) throw error;
+    }
+  
     setDataState((prev) => {
       const next = {
         ...prev,
         cuttings: isEdit
-          ? prev.cuttings.map((c) => (c.id === entry.id ? entry : c))
-          : [...prev.cuttings, entry],
+          ? prev.cuttings.map((c) =>
+              c.id === entry.id ? savedEntry : c
+            )
+          : [...prev.cuttings, savedEntry],
       };
+  
       dataRef.current = next;
       return next;
     });
