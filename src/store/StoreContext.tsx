@@ -736,21 +736,57 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const saveStitchingEntry = useCallback(async (entry: StitchingEntry) => {
     const isEdit = dataRef.current.stitchings.some((s) => s.id === entry.id);
+  
+    let savedEntry = entry;
+  
     if (isEdit) {
-      await supabase.from('stitching_entries').update(stitchingEntryToDb(entry)).eq('id', entry.id);
-      await supabase.from('stitching_color_sizes').delete().eq('stitching_id', entry.id);
+      const { error } = await supabase
+        .from("stitching_entries")
+        .update(stitchingEntryToDb(entry))
+        .eq("id", entry.id);
+  
+      if (error) throw error;
+  
+      await supabase
+        .from("stitching_color_sizes")
+        .delete()
+        .eq("stitching_id", entry.id);
+  
     } else {
-      await supabase.from('stitching_entries').insert(stitchingEntryToDb(entry));
+      const { data: newEntry, error } = await supabase
+        .from("stitching_entries")
+        .insert(stitchingEntryToDb(entry))
+        .select()
+        .single();
+  
+      if (error) throw error;
+  
+      savedEntry = {
+        ...entry,
+        id: newEntry.id,
+      };
     }
-    const csRows = stitchingColorSizesToDb(entry);
-    if (csRows.length > 0) await supabase.from('stitching_color_sizes').insert(csRows);
+  
+    const csRows = stitchingColorSizesToDb(savedEntry);
+  
+    if (csRows.length > 0) {
+      const { error } = await supabase
+        .from("stitching_color_sizes")
+        .insert(csRows);
+  
+      if (error) throw error;
+    }
+  
     setDataState((prev) => {
       const next = {
         ...prev,
         stitchings: isEdit
-          ? prev.stitchings.map((s) => (s.id === entry.id ? entry : s))
-          : [...prev.stitchings, entry],
+          ? prev.stitchings.map((s) =>
+              s.id === entry.id ? savedEntry : s
+            )
+          : [...prev.stitchings, savedEntry],
       };
+  
       dataRef.current = next;
       return next;
     });
