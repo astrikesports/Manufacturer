@@ -487,10 +487,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     let savedLot = lot;
   
     if (isEdit) {
-      await supabase
+      const { error } = await supabase
         .from("lots")
         .update(lotToDb(lot))
         .eq("id", lot.id);
+  
+      if (error) throw error;
   
       await supabase
         .from("lot_color_plans")
@@ -506,7 +508,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const { data: newLot, error } = await supabase
         .from("lots")
         .insert(lotToDb(lot))
-        .select()
+        .select("*")
         .single();
   
       if (error) throw error;
@@ -517,22 +519,35 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       };
     }
   
+    console.log("Original Lot:", lot.id);
+    console.log("Saved Lot:", savedLot.id);
+  
     const cpRows = lotColorPlansToDb(savedLot);
+    console.log("CP Rows", cpRows);
+  
     if (cpRows.length > 0) {
       const { error } = await supabase
         .from("lot_color_plans")
         .insert(cpRows);
   
-      if (error) throw error;
+      if (error) {
+        console.error(error);
+        throw error;
+      }
     }
   
     const spRows = lotSizePlansToDb(savedLot);
+    console.log("SP Rows", spRows);
+  
     if (spRows.length > 0) {
       const { error } = await supabase
         .from("lot_size_plans")
         .insert(spRows);
   
-      if (error) throw error;
+      if (error) {
+        console.error(error);
+        throw error;
+      }
     }
   
     setDataState((prev) => {
