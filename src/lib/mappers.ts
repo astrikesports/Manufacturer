@@ -294,7 +294,7 @@ export function articleSizeConsumptionToDb(a: Article) {
 
 export function articleMaterialConsumptionToDb(a: Article) {
   return a.consumptionSheet.map((cr) => ({
-    id: cr.id, article_id: a.id, material_id: cr.materialId, consumption: cr.consumption,
+     article_id: a.id, material_id: cr.materialId, consumption: cr.consumption,
   }));
 }
 
