@@ -1052,7 +1052,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         .from("cut_pcs_entries")
         .insert(
           newCutEntries.map((ce) => ({
-            id: ce.id,
             lot_id: ce.lotId,
             packing_id: ce.packingId,
             color_id: ce.colorId,
