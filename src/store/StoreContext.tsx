@@ -1098,7 +1098,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       await supabase.from('cut_pcs_entries').delete().eq('lot_id', entry.lotId);
       if (newCutEntries.length > 0) {
         await supabase.from('cut_pcs_entries').insert(
-          newCutEntries.map((ce) => ({ id: ce.id, lot_id: ce.lotId, packing_id: ce.packingId, color_id: ce.colorId, size: ce.size, left_pcs: ce.leftPcs, date: ce.date, status: ce.status }))
+          newCutEntries.map((ce) => ({ lot_id: ce.lotId, packing_id: ce.packingId, color_id: ce.colorId, size: ce.size, left_pcs: ce.leftPcs, date: ce.date, status: ce.status }))
         );
       }
     }
