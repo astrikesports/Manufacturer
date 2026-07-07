@@ -192,7 +192,7 @@ export default function PackingEntryPage() {
       await savePackingEntry({ ...existing, lotId: form.lotId, date: form.date, pcsPerBox: form.pcsPerBox, boxes: form.boxes, notes: form.notes });
       addHistory('Packing', 'Edit', `Updated packing for lot ${lot.lotNo}`);
     } else {
-      const entry: PackingEntry = { id: uid('pk_'), lotId: form.lotId, pressingId: '', date: form.date, pcsPerBox: form.pcsPerBox, boxes: form.boxes, notes: form.notes, createdAt: now() };
+      const entry: PackingEntry = { lotId: form.lotId, pressingId: '', date: form.date, pcsPerBox: form.pcsPerBox, boxes: form.boxes, notes: form.notes, createdAt: now() };
       await savePackingEntry(entry);
       const totalBoxes = form.boxes.reduce((a, b) => a + b.boxes, 0);
       addHistory('Packing', 'Create', `Packing for lot ${lot.lotNo}: ${totalBoxes} boxes`);
