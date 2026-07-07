@@ -483,24 +483,66 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const saveLot = useCallback(async (lot: Lot) => {
     const isEdit = dataRef.current.lots.some((l) => l.id === lot.id);
+  
+    let savedLot = lot;
+  
     if (isEdit) {
-      await supabase.from('lots').update(lotToDb(lot)).eq('id', lot.id);
-      await supabase.from('lot_color_plans').delete().eq('lot_id', lot.id);
-      await supabase.from('lot_size_plans').delete().eq('lot_id', lot.id);
+      await supabase
+        .from("lots")
+        .update(lotToDb(lot))
+        .eq("id", lot.id);
+  
+      await supabase
+        .from("lot_color_plans")
+        .delete()
+        .eq("lot_id", lot.id);
+  
+      await supabase
+        .from("lot_size_plans")
+        .delete()
+        .eq("lot_id", lot.id);
+  
     } else {
-      await supabase.from('lots').insert(lotToDb(lot));
+      const { data: newLot, error } = await supabase
+        .from("lots")
+        .insert(lotToDb(lot))
+        .select()
+        .single();
+  
+      if (error) throw error;
+  
+      savedLot = {
+        ...lot,
+        id: newLot.id,
+      };
     }
-    const cpRows = lotColorPlansToDb(lot);
-    if (cpRows.length > 0) await supabase.from('lot_color_plans').insert(cpRows);
-    const spRows = lotSizePlansToDb(lot);
-    if (spRows.length > 0) await supabase.from('lot_size_plans').insert(spRows);
+  
+    const cpRows = lotColorPlansToDb(savedLot);
+    if (cpRows.length > 0) {
+      const { error } = await supabase
+        .from("lot_color_plans")
+        .insert(cpRows);
+  
+      if (error) throw error;
+    }
+  
+    const spRows = lotSizePlansToDb(savedLot);
+    if (spRows.length > 0) {
+      const { error } = await supabase
+        .from("lot_size_plans")
+        .insert(spRows);
+  
+      if (error) throw error;
+    }
+  
     setDataState((prev) => {
       const next = {
         ...prev,
         lots: isEdit
-          ? prev.lots.map((l) => (l.id === lot.id ? lot : l))
-          : [...prev.lots, lot],
+          ? prev.lots.map((l) => (l.id === lot.id ? savedLot : l))
+          : [...prev.lots, savedLot],
       };
+  
       dataRef.current = next;
       return next;
     });
