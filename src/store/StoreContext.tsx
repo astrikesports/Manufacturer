@@ -874,21 +874,57 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const savePressingEntry = useCallback(async (entry: PressingEntry) => {
     const isEdit = dataRef.current.pressings.some((p) => p.id === entry.id);
+  
+    let savedEntry = entry;
+  
     if (isEdit) {
-      await supabase.from('pressing_entries').update(pressingEntryToDb(entry)).eq('id', entry.id);
-      await supabase.from('pressing_color_sizes').delete().eq('pressing_id', entry.id);
+      const { error } = await supabase
+        .from("pressing_entries")
+        .update(pressingEntryToDb(entry))
+        .eq("id", entry.id);
+  
+      if (error) throw error;
+  
+      await supabase
+        .from("pressing_color_sizes")
+        .delete()
+        .eq("pressing_id", entry.id);
+  
     } else {
-      await supabase.from('pressing_entries').insert(pressingEntryToDb(entry));
+      const { data: newEntry, error } = await supabase
+        .from("pressing_entries")
+        .insert(pressingEntryToDb(entry))
+        .select()
+        .single();
+  
+      if (error) throw error;
+  
+      savedEntry = {
+        ...entry,
+        id: newEntry.id,
+      };
     }
-    const csRows = pressingColorSizesToDb(entry);
-    if (csRows.length > 0) await supabase.from('pressing_color_sizes').insert(csRows);
+  
+    const csRows = pressingColorSizesToDb(savedEntry);
+  
+    if (csRows.length > 0) {
+      const { error } = await supabase
+        .from("pressing_color_sizes")
+        .insert(csRows);
+  
+      if (error) throw error;
+    }
+  
     setDataState((prev) => {
       const next = {
         ...prev,
         pressings: isEdit
-          ? prev.pressings.map((p) => (p.id === entry.id ? entry : p))
-          : [...prev.pressings, entry],
+          ? prev.pressings.map((p) =>
+              p.id === entry.id ? savedEntry : p
+            )
+          : [...prev.pressings, savedEntry],
       };
+  
       dataRef.current = next;
       return next;
     });
