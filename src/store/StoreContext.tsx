@@ -258,12 +258,60 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   
       if (error) throw error;
   
-      const { error: deleteError } = await supabase
-        .from("fabric_colors")
-        .delete()
-        .eq("fabric_id", fabric.id);
+      // Existing colors
+      const existingColors =
+        dataRef.current.fabrics.find((f) => f.id === fabric.id)?.colors ?? [];
   
-      if (deleteError) throw deleteError;
+      // Update or Insert colors
+      for (const color of fabric.colors) {
+        const oldColor = existingColors.find((c) => c.id === color.id);
+  
+        if (oldColor) {
+          const { error } = await supabase
+            .from("fabric_colors")
+            .update({
+              name: color.name,
+              rolls: color.rolls,
+              stock: color.stock,
+              used: color.used,
+            })
+            .eq("id", color.id);
+  
+          if (error) throw error;
+        } else {
+          const { data, error } = await supabase
+            .from("fabric_colors")
+            .insert({
+              fabric_id: fabric.id,
+              name: color.name,
+              rolls: color.rolls,
+              stock: color.stock,
+              used: color.used,
+            })
+            .select()
+            .single();
+  
+          if (error) throw error;
+  
+          color.id = data.id;
+        }
+      }
+  
+      // Delete removed colors
+      const deletedIds = existingColors
+        .filter((c) => !fabric.colors.some((x) => x.id === c.id))
+        .map((c) => c.id);
+  
+      if (deletedIds.length > 0) {
+        const { error } = await supabase
+          .from("fabric_colors")
+          .delete()
+          .in("id", deletedIds);
+  
+        if (error) throw error;
+      }
+  
+      savedFabric = { ...fabric };
   
     } else {
       const { data: newFabric, error } = await supabase
@@ -278,35 +326,34 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         ...fabric,
         id: newFabric.id,
       };
-    }
   
-    if (savedFabric.colors.length > 0) {
-      const { data: insertedColors, error } = await supabase
-        .from("fabric_colors")
-        .insert(
-          savedFabric.colors.map((c) => ({
-            fabric_id: savedFabric.id,
+      if (savedFabric.colors.length > 0) {
+        const { data: insertedColors, error } = await supabase
+          .from("fabric_colors")
+          .insert(
+            savedFabric.colors.map((c) => ({
+              fabric_id: savedFabric.id,
+              name: c.name,
+              rolls: c.rolls,
+              stock: c.stock,
+              used: c.used,
+            }))
+          )
+          .select();
+  
+        if (error) throw error;
+  
+        savedFabric = {
+          ...savedFabric,
+          colors: insertedColors.map((c) => ({
+            id: c.id,
             name: c.name,
             rolls: c.rolls,
             stock: c.stock,
             used: c.used,
-          }))
-        )
-        .select();
-  
-      if (error) throw error;
-  
-      // ⭐ IMPORTANT: Update color IDs with DB UUIDs
-      savedFabric = {
-        ...savedFabric,
-        colors: insertedColors.map((c) => ({
-          id: c.id,
-          name: c.name,
-          rolls: c.rolls,
-          stock: c.stock,
-          used: c.used,
-        })),
-      };
+          })),
+        };
+      }
     }
   
     setDataState((prev) => {
@@ -314,7 +361,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         ...prev,
         fabrics: isEdit
           ? prev.fabrics.map((f) =>
-              f.id === fabric.id ? savedFabric : f
+              f.id === savedFabric.id ? savedFabric : f
             )
           : [...prev.fabrics, savedFabric],
       };
