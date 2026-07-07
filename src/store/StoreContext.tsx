@@ -959,7 +959,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const entries: CutPcsEntry[] = [];
     for (const [size, leftPcs] of sizeLeft) {
       if (leftPcs > 0) {
-        entries.push({ id: uid('cp_'), lotId, packingId, colorId: '', size, leftPcs, date: packingDate, status: 'Available', createdAt: now() });
+        entries.push({ lotId, packingId, colorId: '', size, leftPcs, date: packingDate, status: 'Available', createdAt: now() });
       }
     }
     return entries;
@@ -967,42 +967,122 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const savePackingEntry = useCallback(async (entry: PackingEntry) => {
     const isEdit = dataRef.current.packings.some((p) => p.id === entry.id);
+  
+    let savedEntry = entry;
+  
     if (isEdit) {
-      await supabase.from('packing_entries').update(packingEntryToDb(entry)).eq('id', entry.id);
-      await supabase.from('packing_size_boxes').delete().eq('packing_id', entry.id);
+      const { error } = await supabase
+        .from("packing_entries")
+        .update(packingEntryToDb(entry))
+        .eq("id", entry.id);
+  
+      if (error) throw error;
+  
+      await supabase
+        .from("packing_size_boxes")
+        .delete()
+        .eq("packing_id", entry.id);
+  
     } else {
-      await supabase.from('packing_entries').insert(packingEntryToDb(entry));
+      const { data: newEntry, error } = await supabase
+        .from("packing_entries")
+        .insert(packingEntryToDb(entry))
+        .select()
+        .single();
+  
+      if (error) throw error;
+  
+      savedEntry = {
+        ...entry,
+        id: newEntry.id,
+      };
     }
-    for (const box of entry.boxes) {
-      const { data: insertedBox } = await supabase
-        .from('packing_size_boxes')
-        .insert({ packing_id: entry.id, size: box.size, boxes: box.boxes, pcs_per_box: box.pcsPerBox })
-        .select('id')
-        .maybeSingle();
-      if (insertedBox && box.contents.length > 0) {
-        await supabase.from('packing_box_contents').insert(
-          box.contents.map((c) => ({ packing_size_box_id: (insertedBox as { id: string }).id, color_id: c.colorId, pcs: c.pcs }))
-        );
+  
+    // Insert Boxes
+    for (const box of savedEntry.boxes) {
+      const { data: insertedBox, error } = await supabase
+        .from("packing_size_boxes")
+        .insert({
+          packing_id: savedEntry.id,
+          size: box.size,
+          boxes: box.boxes,
+          pcs_per_box: box.pcsPerBox,
+        })
+        .select("id")
+        .single();
+  
+      if (error) throw error;
+  
+      if (box.contents.length > 0) {
+        const { error: contentError } = await supabase
+          .from("packing_box_contents")
+          .insert(
+            box.contents.map((c) => ({
+              packing_size_box_id: insertedBox.id,
+              color_id: c.colorId,
+              pcs: c.pcs,
+            }))
+          );
+  
+        if (contentError) throw contentError;
       }
     }
-
-    // Compute cut PCS using the updated packings list
+  
+    // Compute Cut PCS
     const updatedPackings = isEdit
-      ? dataRef.current.packings.map((p) => (p.id === entry.id ? entry : p))
-      : [...dataRef.current.packings, entry];
-    const newCutEntries = computeCutPcsForLot(entry.lotId, updatedPackings, entry.date, entry.id);
-
-    await supabase.from('cut_pcs_entries').delete().eq('lot_id', entry.lotId);
+      ? dataRef.current.packings.map((p) =>
+          p.id === entry.id ? savedEntry : p
+        )
+      : [...dataRef.current.packings, savedEntry];
+  
+    const newCutEntries = computeCutPcsForLot(
+      savedEntry.lotId,
+      updatedPackings,
+      savedEntry.date,
+      savedEntry.id
+    );
+  
+    await supabase
+      .from("cut_pcs_entries")
+      .delete()
+      .eq("lot_id", savedEntry.lotId);
+  
     if (newCutEntries.length > 0) {
-      await supabase.from('cut_pcs_entries').insert(
-        newCutEntries.map((ce) => ({ id: ce.id, lot_id: ce.lotId, packing_id: ce.packingId, color_id: ce.colorId, size: ce.size, left_pcs: ce.leftPcs, date: ce.date, status: ce.status }))
-      );
+      const { error } = await supabase
+        .from("cut_pcs_entries")
+        .insert(
+          newCutEntries.map((ce) => ({
+            id: ce.id,
+            lot_id: ce.lotId,
+            packing_id: ce.packingId,
+            color_id: ce.colorId,
+            size: ce.size,
+            left_pcs: ce.leftPcs,
+            date: ce.date,
+            status: ce.status,
+          }))
+        );
+  
+      if (error) throw error;
     }
-
+  
     setDataState((prev) => {
-      const packings = isEdit ? prev.packings.map((p) => (p.id === entry.id ? entry : p)) : [...prev.packings, entry];
-      const otherCut = prev.cutPcsEntries.filter((c) => c.lotId !== entry.lotId);
-      const next = { ...prev, packings, cutPcsEntries: [...otherCut, ...newCutEntries] };
+      const packings = isEdit
+        ? prev.packings.map((p) =>
+            p.id === entry.id ? savedEntry : p
+          )
+        : [...prev.packings, savedEntry];
+  
+      const otherCut = prev.cutPcsEntries.filter(
+        (c) => c.lotId !== savedEntry.lotId
+      );
+  
+      const next = {
+        ...prev,
+        packings,
+        cutPcsEntries: [...otherCut, ...newCutEntries],
+      };
+  
       dataRef.current = next;
       return next;
     });
