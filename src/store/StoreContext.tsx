@@ -403,28 +403,72 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const saveArticle = useCallback(async (article: Article) => {
     const isEdit = dataRef.current.articles.some((a) => a.id === article.id);
+  
+    let savedArticle = article;
+  
     if (isEdit) {
-      await supabase.from('articles').update(articleToDb(article)).eq('id', article.id);
-      await supabase.from('article_size_consumption').delete().eq('article_id', article.id);
-      await supabase.from('article_material_consumption').delete().eq('article_id', article.id);
+      await supabase
+        .from("articles")
+        .update(articleToDb(article))
+        .eq("id", article.id);
+  
+      await supabase
+        .from("article_size_consumption")
+        .delete()
+        .eq("article_id", article.id);
+  
+      await supabase
+        .from("article_material_consumption")
+        .delete()
+        .eq("article_id", article.id);
+  
     } else {
-      await supabase.from('articles').insert(articleToDb(article));
-    }
-    const sizeRows = articleSizeConsumptionToDb(article);
-    if (sizeRows.length > 0) await supabase.from('article_size_consumption').insert(sizeRows);
-    const matRows = articleMaterialConsumptionToDb(article);
-    if (matRows.length > 0) await supabase.from('article_material_consumption').insert(matRows);
-    setDataState((prev) => {
-      const next = {
-        ...prev,
-        articles: isEdit
-          ? prev.articles.map((a) => (a.id === article.id ? article : a))
-          : [...prev.articles, article],
+      const { data: newArticle, error } = await supabase
+        .from("articles")
+        .insert(articleToDb(article))
+        .select()
+        .single();
+  
+      if (error) throw error;
+  
+      savedArticle = {
+        ...article,
+        id: newArticle.id,
       };
-      dataRef.current = next;
-      return next;
-    });
-  }, []);
+    }
+  
+    const sizeRows = articleSizeConsumptionToDb(savedArticle);
+      if (sizeRows.length > 0) {
+        const { error } = await supabase
+          .from("article_size_consumption")
+          .insert(sizeRows);
+    
+        if (error) throw error;
+      }
+    
+      const matRows = articleMaterialConsumptionToDb(savedArticle);
+      if (matRows.length > 0) {
+        const { error } = await supabase
+          .from("article_material_consumption")
+          .insert(matRows);
+    
+        if (error) throw error;
+      }
+    
+      setDataState((prev) => {
+        const next = {
+          ...prev,
+          articles: isEdit
+            ? prev.articles.map((a) =>
+                a.id === article.id ? savedArticle : a
+              )
+            : [...prev.articles, savedArticle],
+        };
+    
+        dataRef.current = next;
+        return next;
+      });
+    }, []);
 
   const deleteArticle = useCallback(async (articleId: string) => {
     await supabase.from('articles').delete().eq('id', articleId);
