@@ -383,19 +383,44 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // ── Raw Material ───────────────────────────────────────────────────────────
 
   const saveRawMaterial = useCallback(async (material: RawMaterial) => {
-    const isEdit = dataRef.current.rawMaterials.some((m) => m.id === material.id);
+    const isEdit = dataRef.current.rawMaterials.some(
+      (m) => m.id === material.id
+    );
+  
+    let savedMaterial = material;
+  
     if (isEdit) {
-      await supabase.from('raw_materials').update(rawMaterialToDb(material)).eq('id', material.id);
+      const { error } = await supabase
+        .from("raw_materials")
+        .update(rawMaterialToDb(material))
+        .eq("id", material.id);
+  
+      if (error) throw error;
     } else {
-      await supabase.from('raw_materials').insert(rawMaterialToDb(material));
+      const { data: newMaterial, error } = await supabase
+        .from("raw_materials")
+        .insert(rawMaterialToDb(material))
+        .select()
+        .single();
+  
+      if (error) throw error;
+  
+      savedMaterial = {
+        ...material,
+        id: newMaterial.id,
+      };
     }
+  
     setDataState((prev) => {
       const next = {
         ...prev,
         rawMaterials: isEdit
-          ? prev.rawMaterials.map((m) => (m.id === material.id ? material : m))
-          : [...prev.rawMaterials, material],
+          ? prev.rawMaterials.map((m) =>
+              m.id === material.id ? savedMaterial : m
+            )
+          : [...prev.rawMaterials, savedMaterial],
       };
+  
       dataRef.current = next;
       return next;
     });
