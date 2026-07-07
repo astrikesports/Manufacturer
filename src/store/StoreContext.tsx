@@ -246,20 +246,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // ── Fabric ─────────────────────────────────────────────────────────────────
 
   const saveFabric = useCallback(async (fabric: Fabric) => {
-  const isEdit = dataRef.current.fabrics.some((f) => f.id === fabric.id);
-
-  let savedFabric = fabric;
-
+    const isEdit = dataRef.current.fabrics.some((f) => f.id === fabric.id);
+  
+    let savedFabric = fabric;
+  
     if (isEdit) {
-      await supabase
+      const { error } = await supabase
         .from("fabrics")
         .update(fabricToDb(fabric))
         .eq("id", fabric.id);
   
-      await supabase
+      if (error) throw error;
+  
+      const { error: deleteError } = await supabase
         .from("fabric_colors")
         .delete()
         .eq("fabric_id", fabric.id);
+  
+      if (deleteError) throw deleteError;
   
     } else {
       const { data: newFabric, error } = await supabase
@@ -277,7 +281,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   
     if (savedFabric.colors.length > 0) {
-      const { error } = await supabase
+      const { data: insertedColors, error } = await supabase
         .from("fabric_colors")
         .insert(
           savedFabric.colors.map((c) => ({
@@ -287,9 +291,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             stock: c.stock,
             used: c.used,
           }))
-        );
+        )
+        .select();
   
       if (error) throw error;
+  
+      // ⭐ IMPORTANT: Update color IDs with DB UUIDs
+      savedFabric = {
+        ...savedFabric,
+        colors: insertedColors.map((c) => ({
+          id: c.id,
+          name: c.name,
+          rolls: c.rolls,
+          stock: c.stock,
+          used: c.used,
+        })),
+      };
     }
   
     setDataState((prev) => {
