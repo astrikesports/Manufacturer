@@ -181,100 +181,40 @@ export default function LotCreation() {
 
     if (editId) {
       const oldLot = data.lots.find((l) => l.id === editId)!;
-    
-      // Restore + update fabric usage
+      // Update fabric used tracking
       const fabric = data.fabrics.find((f) => f.id === oldLot.fabricId);
-    
       if (fabric) {
         const updatedColors = fabric.colors.map((c) => {
           const oldPlan = oldLot.colorPlans.find((cp) => cp.colorId === c.id);
           const newPlan = form.colorPlans.find((cp) => cp.colorId === c.id);
-    
           let used = c.used;
-    
           if (oldPlan) used -= oldPlan.plannedFabric;
           if (newPlan) used += newPlan.plannedFabric;
-    
-          return {
-            ...c,
-            used: Math.max(0, used),
-          };
+          return { ...c, used: Math.max(0, used) };
         });
-    
-        await saveFabric({
-          ...fabric,
-          colors: updatedColors,
-        });
+        await saveFabric({ ...fabric, colors: updatedColors });
       }
-    
-      await saveLot({
-        ...oldLot,
-        lotNo: form.lotNo,
-        articleId: form.articleId,
-        fabricId: form.fabricId,
-        colorIds: [...form.colorIds],
-        sizes: [...form.sizes],
-        colorPlans: [...form.colorPlans],
-        sizePlans: [...form.sizePlans],
-        plannedProduction,
-        sellingPricePerPcs: form.sellingPricePerPcs,
-      });
-    
-      addHistory(
-        "Lot Creation",
-        "Edit",
-        `Updated lot: ${form.lotNo}`
-      );
-    
+      await saveLot({ ...oldLot, lotNo: form.lotNo, articleId: form.articleId, fabricId: form.fabricId, colorIds: form.colorIds, sizes: form.sizes, colorPlans: form.colorPlans, sizePlans: form.sizePlans, plannedProduction, sellingPricePerPcs: form.sellingPricePerPcs });
+      addHistory('Lot Creation', 'Edit', `Updated lot: ${form.lotNo}`);
     } else {
       const lot: Lot = {
-        id: "", // Supabase UUID generate karega
-        lotNo: form.lotNo,
-        articleId: form.articleId,
-        fabricId: form.fabricId,
-        colorIds: [...form.colorIds],
-        sizes: [...form.sizes],
-        colorPlans: [...form.colorPlans],
-        sizePlans: [...form.sizePlans],
-        plannedProduction,
-        sellingPricePerPcs: form.sellingPricePerPcs,
-        status: "Active",
-        createdAt: now(),
+        id: uid('l_'), lotNo: form.lotNo, articleId: form.articleId, fabricId: form.fabricId,
+        colorIds: form.colorIds, sizes: form.sizes, colorPlans: form.colorPlans, sizePlans: form.sizePlans,
+        plannedProduction, sellingPricePerPcs: form.sellingPricePerPcs,
+        status: 'Active', createdAt: now(),
       };
-    
+      // Update fabric used tracking
       const fabric = data.fabrics.find((f) => f.id === form.fabricId);
-    
       if (fabric) {
         const updatedColors = fabric.colors.map((c) => {
           const plan = form.colorPlans.find((cp) => cp.colorId === c.id);
-    
-          return plan
-            ? {
-                ...c,
-                used: c.used + plan.plannedFabric,
-              }
-            : c;
+          return plan ? { ...c, used: c.used + plan.plannedFabric } : c;
         });
-    
-        await saveFabric({
-          ...fabric,
-          colors: updatedColors,
-        });
+        await saveFabric({ ...fabric, colors: updatedColors });
       }
-    
-      console.log("FORM COLOR IDS", form.colorIds);
-      console.log("FORM COLOR PLANS", form.colorPlans);
-      console.log("FABRIC COLORS", fabric?.colors);
-    
       await saveLot(lot);
-    
-      addHistory(
-        "Lot Creation",
-        "Create",
-        `Created lot: ${form.lotNo} | ${form.colorIds.length} colors | ${form.sizes.length} sizes | ${plannedProduction} pcs @ ₹${form.sellingPricePerPcs}/pcs`
-      );
+      addHistory('Lot Creation', 'Create', `Created lot: ${form.lotNo} | ${form.colorIds.length} colors | ${form.sizes.length} sizes | ${plannedProduction} pcs @ ₹${form.sellingPricePerPcs}/pcs`);
     }
-    
     setModalOpen(false);
   };
 

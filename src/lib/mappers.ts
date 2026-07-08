@@ -256,16 +256,16 @@ export function dbToSettings(row: DbAppSettings): Settings {
 // ─── AppData → DB Insert shapes ───────────────────────────────────────────────
 
 export function fabricToDb(f: Fabric) {
-  return { name: f.name, unit: f.unit };
+  return { id: f.id, name: f.name, unit: f.unit };
 }
 
 export function fabricColorToDb(c: FabricColor, fabricId: string) {
-  return { fabric_id: fabricId, name: c.name, rolls: c.rolls, stock: c.stock, used: c.used };
+  return { id: c.id, fabric_id: fabricId, name: c.name, rolls: c.rolls, stock: c.stock, used: c.used };
 }
 
 export function rawMaterialToDb(m: RawMaterial) {
   return {
-    name: m.name, category: m.category, unit: m.unit,
+    id: m.id, name: m.name, category: m.category, unit: m.unit,
     purchase_price: m.purchasePrice, supplier: m.supplier, gst: m.gst,
     status: m.status, remarks: m.remarks,
     opening_stock: m.openingStock ?? 0,
@@ -275,7 +275,7 @@ export function rawMaterialToDb(m: RawMaterial) {
 }
 
 export function stitchingEntryToDb(e: StitchingEntry) {
-  return { lot_id: e.lotId, cutting_id: e.cuttingId || null, date: e.date, notes: e.notes ?? '' };
+  return { id: e.id, lot_id: e.lotId, cutting_id: e.cuttingId || null, date: e.date, notes: e.notes ?? '' };
 }
 
 export function stitchingColorSizesToDb(e: StitchingEntry) {
@@ -285,7 +285,7 @@ export function stitchingColorSizesToDb(e: StitchingEntry) {
 }
 
 export function articleToDb(a: Article) {
-  return { code: a.code, name: a.name, fabric_id: a.fabricId };
+  return { id: a.id, code: a.code, name: a.name, fabric_id: a.fabricId };
 }
 
 export function articleSizeConsumptionToDb(a: Article) {
@@ -294,13 +294,13 @@ export function articleSizeConsumptionToDb(a: Article) {
 
 export function articleMaterialConsumptionToDb(a: Article) {
   return a.consumptionSheet.map((cr) => ({
-     article_id: a.id, material_id: cr.materialId, consumption: cr.consumption,
+    id: cr.id, article_id: a.id, material_id: cr.materialId, consumption: cr.consumption,
   }));
 }
 
 export function lotToDb(lot: Lot) {
   return {
-    lot_no: lot.lotNo, article_id: lot.articleId, fabric_id: lot.fabricId,
+    id: lot.id, lot_no: lot.lotNo, article_id: lot.articleId, fabric_id: lot.fabricId,
     planned_production: lot.plannedProduction, selling_price_per_pcs: lot.sellingPricePerPcs,
     status: lot.status,
   };
@@ -317,7 +317,7 @@ export function lotSizePlansToDb(lot: Lot) {
 }
 
 export function cuttingEntryToDb(e: CuttingEntry) {
-  return { lot_id: e.lotId, date: e.date, fabric_used: e.fabricUsed, notes: e.notes ?? '' };
+  return { id: e.id, lot_id: e.lotId, date: e.date, fabric_used: e.fabricUsed, notes: e.notes ?? '' };
 }
 
 export function cuttingColorSizesToDb(e: CuttingEntry) {
@@ -327,7 +327,7 @@ export function cuttingColorSizesToDb(e: CuttingEntry) {
 }
 
 export function finishingEntryToDb(e: FinishingEntry) {
-  return { lot_id: e.lotId, cutting_id: e.cuttingId || null, date: e.date, notes: e.notes ?? '' };
+  return { id: e.id, lot_id: e.lotId, cutting_id: e.cuttingId || null, date: e.date, notes: e.notes ?? '' };
 }
 
 export function finishingColorSizesToDb(e: FinishingEntry) {
@@ -337,7 +337,7 @@ export function finishingColorSizesToDb(e: FinishingEntry) {
 }
 
 export function pressingEntryToDb(e: PressingEntry) {
-  return { lot_id: e.lotId, finishing_id: e.finishingId || null, date: e.date, notes: e.notes ?? '' };
+  return { id: e.id, lot_id: e.lotId, finishing_id: e.finishingId || null, date: e.date, notes: e.notes ?? '' };
 }
 
 export function pressingColorSizesToDb(e: PressingEntry) {
@@ -347,7 +347,7 @@ export function pressingColorSizesToDb(e: PressingEntry) {
 }
 
 export function packingEntryToDb(e: PackingEntry) {
-  return { lot_id: e.lotId, pressing_id: e.pressingId || null, date: e.date, pcs_per_box: e.pcsPerBox ?? 0, notes: e.notes ?? '' };
+  return { id: e.id, lot_id: e.lotId, pressing_id: e.pressingId || null, date: e.date, pcs_per_box: e.pcsPerBox ?? 0, notes: e.notes ?? '' };
 }
 
 export function packingSizeBoxesToDb(e: PackingEntry) {
@@ -356,7 +356,7 @@ export function packingSizeBoxesToDb(e: PackingEntry) {
 
 export function dispatchEntryToDb(e: DispatchEntry) {
   return {
-    lot_id: e.lotId, date: e.date, party: e.party,
+    id: e.id, lot_id: e.lotId, date: e.date, party: e.party,
     invoice_no: e.invoiceNo, type: e.type, notes: e.notes ?? '',
   };
 }

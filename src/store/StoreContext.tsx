@@ -206,19 +206,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const addHistory = useCallback(async (module: string, action: 'Create' | 'Edit' | 'Delete', description: string) => {
-    const row = {
-      module,
-      action,
-      description
-    };
-    
-    const { data: inserted, error } = await supabase
-      .from("history_events")
-      .insert(row)
-      .select()
-      .single();
-    
-    if (error) throw error;
+    const row = { id: uid('h_'), module, action, description };
+    await supabase.from('history_events').insert(row);
     setDataState((prev) => {
       const next = { ...prev, history: [{ ...row, timestamp: now() }, ...prev.history].slice(0, 200) };
       dataRef.current = next;
@@ -247,125 +236,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const saveFabric = useCallback(async (fabric: Fabric) => {
     const isEdit = dataRef.current.fabrics.some((f) => f.id === fabric.id);
-  
-    let savedFabric = fabric;
-  
     if (isEdit) {
-      const { error } = await supabase
-        .from("fabrics")
-        .update(fabricToDb(fabric))
-        .eq("id", fabric.id);
-  
-      if (error) throw error;
-  
-      // Existing colors
-      const existingColors =
-        dataRef.current.fabrics.find((f) => f.id === fabric.id)?.colors ?? [];
-  
-      // Update or Insert colors
-      for (const color of fabric.colors) {
-        const oldColor = existingColors.find((c) => c.id === color.id);
-  
-        if (oldColor) {
-          const { error } = await supabase
-            .from("fabric_colors")
-            .update({
-              name: color.name,
-              rolls: color.rolls,
-              stock: color.stock,
-              used: color.used,
-            })
-            .eq("id", color.id);
-  
-          if (error) throw error;
-        } else {
-          const { data, error } = await supabase
-            .from("fabric_colors")
-            .insert({
-              fabric_id: fabric.id,
-              name: color.name,
-              rolls: color.rolls,
-              stock: color.stock,
-              used: color.used,
-            })
-            .select()
-            .single();
-  
-          if (error) throw error;
-  
-          color.id = data.id;
-        }
-      }
-  
-      // Delete removed colors
-      const deletedIds = existingColors
-        .filter((c) => !fabric.colors.some((x) => x.id === c.id))
-        .map((c) => c.id);
-  
-      if (deletedIds.length > 0) {
-        const { error } = await supabase
-          .from("fabric_colors")
-          .delete()
-          .in("id", deletedIds);
-  
-        if (error) throw error;
-      }
-  
-      savedFabric = { ...fabric };
-  
+      await supabase.from('fabrics').update(fabricToDb(fabric)).eq('id', fabric.id);
+      await supabase.from('fabric_colors').delete().eq('fabric_id', fabric.id);
     } else {
-      const { data: newFabric, error } = await supabase
-        .from("fabrics")
-        .insert(fabricToDb(fabric))
-        .select()
-        .single();
-  
-      if (error) throw error;
-  
-      savedFabric = {
-        ...fabric,
-        id: newFabric.id,
-      };
-  
-      if (savedFabric.colors.length > 0) {
-        const { data: insertedColors, error } = await supabase
-          .from("fabric_colors")
-          .insert(
-            savedFabric.colors.map((c) => ({
-              fabric_id: savedFabric.id,
-              name: c.name,
-              rolls: c.rolls,
-              stock: c.stock,
-              used: c.used,
-            }))
-          )
-          .select();
-  
-        if (error) throw error;
-  
-        savedFabric = {
-          ...savedFabric,
-          colors: insertedColors.map((c) => ({
-            id: c.id,
-            name: c.name,
-            rolls: c.rolls,
-            stock: c.stock,
-            used: c.used,
-          })),
-        };
-      }
+      await supabase.from('fabrics').insert(fabricToDb(fabric));
     }
-  
+    if (fabric.colors.length > 0) {
+      await supabase.from('fabric_colors').insert(fabric.colors.map((c) => fabricColorToDb(c, fabric.id)));
+    }
     setDataState((prev) => {
       const next = {
         ...prev,
         fabrics: isEdit
-          ? prev.fabrics.map((f) =>
-              f.id === savedFabric.id ? savedFabric : f
-            )
-          : [...prev.fabrics, savedFabric],
+          ? prev.fabrics.map((f) => (f.id === fabric.id ? fabric : f))
+          : [...prev.fabrics, fabric],
       };
-  
       dataRef.current = next;
       return next;
     });
@@ -383,44 +269,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // ── Raw Material ───────────────────────────────────────────────────────────
 
   const saveRawMaterial = useCallback(async (material: RawMaterial) => {
-    const isEdit = dataRef.current.rawMaterials.some(
-      (m) => m.id === material.id
-    );
-  
-    let savedMaterial = material;
-  
+    const isEdit = dataRef.current.rawMaterials.some((m) => m.id === material.id);
     if (isEdit) {
-      const { error } = await supabase
-        .from("raw_materials")
-        .update(rawMaterialToDb(material))
-        .eq("id", material.id);
-  
-      if (error) throw error;
+      await supabase.from('raw_materials').update(rawMaterialToDb(material)).eq('id', material.id);
     } else {
-      const { data: newMaterial, error } = await supabase
-        .from("raw_materials")
-        .insert(rawMaterialToDb(material))
-        .select()
-        .single();
-  
-      if (error) throw error;
-  
-      savedMaterial = {
-        ...material,
-        id: newMaterial.id,
-      };
+      await supabase.from('raw_materials').insert(rawMaterialToDb(material));
     }
-  
     setDataState((prev) => {
       const next = {
         ...prev,
         rawMaterials: isEdit
-          ? prev.rawMaterials.map((m) =>
-              m.id === material.id ? savedMaterial : m
-            )
-          : [...prev.rawMaterials, savedMaterial],
+          ? prev.rawMaterials.map((m) => (m.id === material.id ? material : m))
+          : [...prev.rawMaterials, material],
       };
-  
       dataRef.current = next;
       return next;
     });
@@ -492,72 +353,28 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const saveArticle = useCallback(async (article: Article) => {
     const isEdit = dataRef.current.articles.some((a) => a.id === article.id);
-  
-    let savedArticle = article;
-  
     if (isEdit) {
-      await supabase
-        .from("articles")
-        .update(articleToDb(article))
-        .eq("id", article.id);
-  
-      await supabase
-        .from("article_size_consumption")
-        .delete()
-        .eq("article_id", article.id);
-  
-      await supabase
-        .from("article_material_consumption")
-        .delete()
-        .eq("article_id", article.id);
-  
+      await supabase.from('articles').update(articleToDb(article)).eq('id', article.id);
+      await supabase.from('article_size_consumption').delete().eq('article_id', article.id);
+      await supabase.from('article_material_consumption').delete().eq('article_id', article.id);
     } else {
-      const { data: newArticle, error } = await supabase
-        .from("articles")
-        .insert(articleToDb(article))
-        .select()
-        .single();
-  
-      if (error) throw error;
-  
-      savedArticle = {
-        ...article,
-        id: newArticle.id,
-      };
+      await supabase.from('articles').insert(articleToDb(article));
     }
-  
-    const sizeRows = articleSizeConsumptionToDb(savedArticle);
-      if (sizeRows.length > 0) {
-        const { error } = await supabase
-          .from("article_size_consumption")
-          .insert(sizeRows);
-    
-        if (error) throw error;
-      }
-    
-      const matRows = articleMaterialConsumptionToDb(savedArticle);
-      if (matRows.length > 0) {
-        const { error } = await supabase
-          .from("article_material_consumption")
-          .insert(matRows);
-    
-        if (error) throw error;
-      }
-    
-      setDataState((prev) => {
-        const next = {
-          ...prev,
-          articles: isEdit
-            ? prev.articles.map((a) =>
-                a.id === article.id ? savedArticle : a
-              )
-            : [...prev.articles, savedArticle],
-        };
-    
-        dataRef.current = next;
-        return next;
-      });
-    }, []);
+    const sizeRows = articleSizeConsumptionToDb(article);
+    if (sizeRows.length > 0) await supabase.from('article_size_consumption').insert(sizeRows);
+    const matRows = articleMaterialConsumptionToDb(article);
+    if (matRows.length > 0) await supabase.from('article_material_consumption').insert(matRows);
+    setDataState((prev) => {
+      const next = {
+        ...prev,
+        articles: isEdit
+          ? prev.articles.map((a) => (a.id === article.id ? article : a))
+          : [...prev.articles, article],
+      };
+      dataRef.current = next;
+      return next;
+    });
+  }, []);
 
   const deleteArticle = useCallback(async (articleId: string) => {
     await supabase.from('articles').delete().eq('id', articleId);
@@ -572,81 +389,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const saveLot = useCallback(async (lot: Lot) => {
     const isEdit = dataRef.current.lots.some((l) => l.id === lot.id);
-  
-    let savedLot = lot;
-  
     if (isEdit) {
-      const { error } = await supabase
-        .from("lots")
-        .update(lotToDb(lot))
-        .eq("id", lot.id);
-  
-      if (error) throw error;
-  
-      await supabase
-        .from("lot_color_plans")
-        .delete()
-        .eq("lot_id", lot.id);
-  
-      await supabase
-        .from("lot_size_plans")
-        .delete()
-        .eq("lot_id", lot.id);
-  
+      await supabase.from('lots').update(lotToDb(lot)).eq('id', lot.id);
+      await supabase.from('lot_color_plans').delete().eq('lot_id', lot.id);
+      await supabase.from('lot_size_plans').delete().eq('lot_id', lot.id);
     } else {
-      const { data: newLot, error } = await supabase
-        .from("lots")
-        .insert(lotToDb(lot))
-        .select("*")
-        .single();
-  
-      if (error) throw error;
-  
-      savedLot = {
-        ...lot,
-        id: newLot.id,
-      };
+      await supabase.from('lots').insert(lotToDb(lot));
     }
-  
-    console.log("Original Lot:", lot.id);
-    console.log("Saved Lot:", savedLot.id);
-  
-    const cpRows = lotColorPlansToDb(savedLot);
-    console.log("CP Rows", cpRows);
-  
-    if (cpRows.length > 0) {
-      const { error } = await supabase
-        .from("lot_color_plans")
-        .insert(cpRows);
-  
-      if (error) {
-        console.error(error);
-        throw error;
-      }
-    }
-  
-    const spRows = lotSizePlansToDb(savedLot);
-    console.log("SP Rows", spRows);
-  
-    if (spRows.length > 0) {
-      const { error } = await supabase
-        .from("lot_size_plans")
-        .insert(spRows);
-  
-      if (error) {
-        console.error(error);
-        throw error;
-      }
-    }
-  
+    const cpRows = lotColorPlansToDb(lot);
+    if (cpRows.length > 0) await supabase.from('lot_color_plans').insert(cpRows);
+    const spRows = lotSizePlansToDb(lot);
+    if (spRows.length > 0) await supabase.from('lot_size_plans').insert(spRows);
     setDataState((prev) => {
       const next = {
         ...prev,
         lots: isEdit
-          ? prev.lots.map((l) => (l.id === lot.id ? savedLot : l))
-          : [...prev.lots, savedLot],
+          ? prev.lots.map((l) => (l.id === lot.id ? lot : l))
+          : [...prev.lots, lot],
       };
-  
       dataRef.current = next;
       return next;
     });
@@ -665,59 +425,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const saveCuttingEntry = useCallback(async (entry: CuttingEntry) => {
     const isEdit = dataRef.current.cuttings.some((c) => c.id === entry.id);
-  
-    let savedEntry = entry;
-  
     if (isEdit) {
-      const { error } = await supabase
-        .from("cutting_entries")
-        .update(cuttingEntryToDb(entry))
-        .eq("id", entry.id);
-  
-      if (error) throw error;
-  
-      await supabase
-        .from("cutting_color_sizes")
-        .delete()
-        .eq("cutting_id", entry.id);
-  
+      await supabase.from('cutting_entries').update(cuttingEntryToDb(entry)).eq('id', entry.id);
+      await supabase.from('cutting_color_sizes').delete().eq('cutting_id', entry.id);
     } else {
-      const { data: newEntry, error } = await supabase
-        .from("cutting_entries")
-        .insert(cuttingEntryToDb(entry))
-        .select()
-        .single();
-  
-      if (error) throw error;
-  
-      savedEntry = {
-        ...entry,
-        id: newEntry.id,
-      };
+      await supabase.from('cutting_entries').insert(cuttingEntryToDb(entry));
     }
-  
-    const csRows = cuttingColorSizesToDb(savedEntry);
-  
-    console.log("Cutting Rows", JSON.stringify(csRows, null, 2));
-  
-    if (csRows.length > 0) {
-      const { error } = await supabase
-        .from("cutting_color_sizes")
-        .insert(csRows);
-  
-      if (error) throw error;
-    }
-  
+    const csRows = cuttingColorSizesToDb(entry);
+    if (csRows.length > 0) await supabase.from('cutting_color_sizes').insert(csRows);
     setDataState((prev) => {
       const next = {
         ...prev,
         cuttings: isEdit
-          ? prev.cuttings.map((c) =>
-              c.id === entry.id ? savedEntry : c
-            )
-          : [...prev.cuttings, savedEntry],
+          ? prev.cuttings.map((c) => (c.id === entry.id ? entry : c))
+          : [...prev.cuttings, entry],
       };
-  
       dataRef.current = next;
       return next;
     });
@@ -736,57 +458,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const saveStitchingEntry = useCallback(async (entry: StitchingEntry) => {
     const isEdit = dataRef.current.stitchings.some((s) => s.id === entry.id);
-  
-    let savedEntry = entry;
-  
     if (isEdit) {
-      const { error } = await supabase
-        .from("stitching_entries")
-        .update(stitchingEntryToDb(entry))
-        .eq("id", entry.id);
-  
-      if (error) throw error;
-  
-      await supabase
-        .from("stitching_color_sizes")
-        .delete()
-        .eq("stitching_id", entry.id);
-  
+      await supabase.from('stitching_entries').update(stitchingEntryToDb(entry)).eq('id', entry.id);
+      await supabase.from('stitching_color_sizes').delete().eq('stitching_id', entry.id);
     } else {
-      const { data: newEntry, error } = await supabase
-        .from("stitching_entries")
-        .insert(stitchingEntryToDb(entry))
-        .select()
-        .single();
-  
-      if (error) throw error;
-  
-      savedEntry = {
-        ...entry,
-        id: newEntry.id,
-      };
+      await supabase.from('stitching_entries').insert(stitchingEntryToDb(entry));
     }
-  
-    const csRows = stitchingColorSizesToDb(savedEntry);
-  
-    if (csRows.length > 0) {
-      const { error } = await supabase
-        .from("stitching_color_sizes")
-        .insert(csRows);
-  
-      if (error) throw error;
-    }
-  
+    const csRows = stitchingColorSizesToDb(entry);
+    if (csRows.length > 0) await supabase.from('stitching_color_sizes').insert(csRows);
     setDataState((prev) => {
       const next = {
         ...prev,
         stitchings: isEdit
-          ? prev.stitchings.map((s) =>
-              s.id === entry.id ? savedEntry : s
-            )
-          : [...prev.stitchings, savedEntry],
+          ? prev.stitchings.map((s) => (s.id === entry.id ? entry : s))
+          : [...prev.stitchings, entry],
       };
-  
       dataRef.current = next;
       return next;
     });
@@ -805,57 +491,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const saveFinishingEntry = useCallback(async (entry: FinishingEntry) => {
     const isEdit = dataRef.current.finishings.some((f) => f.id === entry.id);
-  
-    let savedEntry = entry;
-  
     if (isEdit) {
-      const { error } = await supabase
-        .from("finishing_entries")
-        .update(finishingEntryToDb(entry))
-        .eq("id", entry.id);
-  
-      if (error) throw error;
-  
-      await supabase
-        .from("finishing_color_sizes")
-        .delete()
-        .eq("finishing_id", entry.id);
-  
+      await supabase.from('finishing_entries').update(finishingEntryToDb(entry)).eq('id', entry.id);
+      await supabase.from('finishing_color_sizes').delete().eq('finishing_id', entry.id);
     } else {
-      const { data: newEntry, error } = await supabase
-        .from("finishing_entries")
-        .insert(finishingEntryToDb(entry))
-        .select()
-        .single();
-  
-      if (error) throw error;
-  
-      savedEntry = {
-        ...entry,
-        id: newEntry.id,
-      };
+      await supabase.from('finishing_entries').insert(finishingEntryToDb(entry));
     }
-  
-    const csRows = finishingColorSizesToDb(savedEntry);
-  
-    if (csRows.length > 0) {
-      const { error } = await supabase
-        .from("finishing_color_sizes")
-        .insert(csRows);
-  
-      if (error) throw error;
-    }
-  
+    const csRows = finishingColorSizesToDb(entry);
+    if (csRows.length > 0) await supabase.from('finishing_color_sizes').insert(csRows);
     setDataState((prev) => {
       const next = {
         ...prev,
         finishings: isEdit
-          ? prev.finishings.map((f) =>
-              f.id === entry.id ? savedEntry : f
-            )
-          : [...prev.finishings, savedEntry],
+          ? prev.finishings.map((f) => (f.id === entry.id ? entry : f))
+          : [...prev.finishings, entry],
       };
-  
       dataRef.current = next;
       return next;
     });
@@ -874,57 +524,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const savePressingEntry = useCallback(async (entry: PressingEntry) => {
     const isEdit = dataRef.current.pressings.some((p) => p.id === entry.id);
-  
-    let savedEntry = entry;
-  
     if (isEdit) {
-      const { error } = await supabase
-        .from("pressing_entries")
-        .update(pressingEntryToDb(entry))
-        .eq("id", entry.id);
-  
-      if (error) throw error;
-  
-      await supabase
-        .from("pressing_color_sizes")
-        .delete()
-        .eq("pressing_id", entry.id);
-  
+      await supabase.from('pressing_entries').update(pressingEntryToDb(entry)).eq('id', entry.id);
+      await supabase.from('pressing_color_sizes').delete().eq('pressing_id', entry.id);
     } else {
-      const { data: newEntry, error } = await supabase
-        .from("pressing_entries")
-        .insert(pressingEntryToDb(entry))
-        .select()
-        .single();
-  
-      if (error) throw error;
-  
-      savedEntry = {
-        ...entry,
-        id: newEntry.id,
-      };
+      await supabase.from('pressing_entries').insert(pressingEntryToDb(entry));
     }
-  
-    const csRows = pressingColorSizesToDb(savedEntry);
-  
-    if (csRows.length > 0) {
-      const { error } = await supabase
-        .from("pressing_color_sizes")
-        .insert(csRows);
-  
-      if (error) throw error;
-    }
-  
+    const csRows = pressingColorSizesToDb(entry);
+    if (csRows.length > 0) await supabase.from('pressing_color_sizes').insert(csRows);
     setDataState((prev) => {
       const next = {
         ...prev,
         pressings: isEdit
-          ? prev.pressings.map((p) =>
-              p.id === entry.id ? savedEntry : p
-            )
-          : [...prev.pressings, savedEntry],
+          ? prev.pressings.map((p) => (p.id === entry.id ? entry : p))
+          : [...prev.pressings, entry],
       };
-  
       dataRef.current = next;
       return next;
     });
@@ -959,7 +573,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const entries: CutPcsEntry[] = [];
     for (const [size, leftPcs] of sizeLeft) {
       if (leftPcs > 0) {
-        entries.push({ lotId, packingId, colorId: '', size, leftPcs, date: packingDate, status: 'Available', createdAt: now() });
+        entries.push({ id: uid('cp_'), lotId, packingId, colorId: '', size, leftPcs, date: packingDate, status: 'Available', createdAt: now() });
       }
     }
     return entries;
@@ -967,121 +581,42 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const savePackingEntry = useCallback(async (entry: PackingEntry) => {
     const isEdit = dataRef.current.packings.some((p) => p.id === entry.id);
-  
-    let savedEntry = entry;
-  
     if (isEdit) {
-      const { error } = await supabase
-        .from("packing_entries")
-        .update(packingEntryToDb(entry))
-        .eq("id", entry.id);
-  
-      if (error) throw error;
-  
-      await supabase
-        .from("packing_size_boxes")
-        .delete()
-        .eq("packing_id", entry.id);
-  
+      await supabase.from('packing_entries').update(packingEntryToDb(entry)).eq('id', entry.id);
+      await supabase.from('packing_size_boxes').delete().eq('packing_id', entry.id);
     } else {
-      const { data: newEntry, error } = await supabase
-        .from("packing_entries")
-        .insert(packingEntryToDb(entry))
-        .select()
-        .single();
-  
-      if (error) throw error;
-  
-      savedEntry = {
-        ...entry,
-        id: newEntry.id,
-      };
+      await supabase.from('packing_entries').insert(packingEntryToDb(entry));
     }
-  
-    // Insert Boxes
-    for (const box of savedEntry.boxes) {
-      const { data: insertedBox, error } = await supabase
-        .from("packing_size_boxes")
-        .insert({
-          packing_id: savedEntry.id,
-          size: box.size,
-          boxes: box.boxes,
-          pcs_per_box: box.pcsPerBox,
-        })
-        .select("id")
-        .single();
-  
-      if (error) throw error;
-  
-      if (box.contents.length > 0) {
-        const { error: contentError } = await supabase
-          .from("packing_box_contents")
-          .insert(
-            box.contents.map((c) => ({
-              packing_size_box_id: insertedBox.id,
-              color_id: c.colorId,
-              pcs: c.pcs,
-            }))
-          );
-  
-        if (contentError) throw contentError;
+    for (const box of entry.boxes) {
+      const { data: insertedBox } = await supabase
+        .from('packing_size_boxes')
+        .insert({ packing_id: entry.id, size: box.size, boxes: box.boxes, pcs_per_box: box.pcsPerBox })
+        .select('id')
+        .maybeSingle();
+      if (insertedBox && box.contents.length > 0) {
+        await supabase.from('packing_box_contents').insert(
+          box.contents.map((c) => ({ packing_size_box_id: (insertedBox as { id: string }).id, color_id: c.colorId, pcs: c.pcs }))
+        );
       }
     }
-  
-    // Compute Cut PCS
+
+    // Compute cut PCS using the updated packings list
     const updatedPackings = isEdit
-      ? dataRef.current.packings.map((p) =>
-          p.id === entry.id ? savedEntry : p
-        )
-      : [...dataRef.current.packings, savedEntry];
-  
-    const newCutEntries = computeCutPcsForLot(
-      savedEntry.lotId,
-      updatedPackings,
-      savedEntry.date,
-      savedEntry.id
-    );
-  
-    await supabase
-      .from("cut_pcs_entries")
-      .delete()
-      .eq("lot_id", savedEntry.lotId);
-  
+      ? dataRef.current.packings.map((p) => (p.id === entry.id ? entry : p))
+      : [...dataRef.current.packings, entry];
+    const newCutEntries = computeCutPcsForLot(entry.lotId, updatedPackings, entry.date, entry.id);
+
+    await supabase.from('cut_pcs_entries').delete().eq('lot_id', entry.lotId);
     if (newCutEntries.length > 0) {
-      const { error } = await supabase
-        .from("cut_pcs_entries")
-        .insert(
-          newCutEntries.map((ce) => ({
-            lot_id: ce.lotId,
-            packing_id: ce.packingId,
-            color_id: ce.colorId,
-            size: ce.size,
-            left_pcs: ce.leftPcs,
-            date: ce.date,
-            status: ce.status,
-          }))
-        );
-  
-      if (error) throw error;
-    }
-  
-    setDataState((prev) => {
-      const packings = isEdit
-        ? prev.packings.map((p) =>
-            p.id === entry.id ? savedEntry : p
-          )
-        : [...prev.packings, savedEntry];
-  
-      const otherCut = prev.cutPcsEntries.filter(
-        (c) => c.lotId !== savedEntry.lotId
+      await supabase.from('cut_pcs_entries').insert(
+        newCutEntries.map((ce) => ({ id: ce.id, lot_id: ce.lotId, packing_id: ce.packingId, color_id: ce.colorId, size: ce.size, left_pcs: ce.leftPcs, date: ce.date, status: ce.status }))
       );
-  
-      const next = {
-        ...prev,
-        packings,
-        cutPcsEntries: [...otherCut, ...newCutEntries],
-      };
-  
+    }
+
+    setDataState((prev) => {
+      const packings = isEdit ? prev.packings.map((p) => (p.id === entry.id ? entry : p)) : [...prev.packings, entry];
+      const otherCut = prev.cutPcsEntries.filter((c) => c.lotId !== entry.lotId);
+      const next = { ...prev, packings, cutPcsEntries: [...otherCut, ...newCutEntries] };
       dataRef.current = next;
       return next;
     });
@@ -1098,7 +633,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       await supabase.from('cut_pcs_entries').delete().eq('lot_id', entry.lotId);
       if (newCutEntries.length > 0) {
         await supabase.from('cut_pcs_entries').insert(
-          newCutEntries.map((ce) => ({ lot_id: ce.lotId, packing_id: ce.packingId, color_id: ce.colorId, size: ce.size, left_pcs: ce.leftPcs, date: ce.date, status: ce.status }))
+          newCutEntries.map((ce) => ({ id: ce.id, lot_id: ce.lotId, packing_id: ce.packingId, color_id: ce.colorId, size: ce.size, left_pcs: ce.leftPcs, date: ce.date, status: ce.status }))
         );
       }
     }
@@ -1142,59 +677,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const saveDispatchEntry = useCallback(async (entry: DispatchEntry) => {
     const isEdit = dataRef.current.dispatches.some((d) => d.id === entry.id);
-  
-    let savedEntry = entry;
-  
     if (isEdit) {
-      const { error } = await supabase
-        .from("dispatch_entries")
-        .update(dispatchEntryToDb(entry))
-        .eq("id", entry.id);
-  
-      if (error) throw error;
-  
-      const { error: deleteError } = await supabase
-        .from("dispatch_boxes")
-        .delete()
-        .eq("dispatch_id", entry.id);
-  
-      if (deleteError) throw deleteError;
-  
+      await supabase.from('dispatch_entries').update(dispatchEntryToDb(entry)).eq('id', entry.id);
+      await supabase.from('dispatch_boxes').delete().eq('dispatch_id', entry.id);
     } else {
-      const { data: newEntry, error } = await supabase
-        .from("dispatch_entries")
-        .insert(dispatchEntryToDb(entry))
-        .select()
-        .single();
-  
-      if (error) throw error;
-  
-      savedEntry = {
-        ...entry,
-        id: newEntry.id,
-      };
+      await supabase.from('dispatch_entries').insert(dispatchEntryToDb(entry));
     }
-  
-    const dbRows = dispatchBoxesToDb(savedEntry);
-  
-    if (dbRows.length > 0) {
-      const { error } = await supabase
-        .from("dispatch_boxes")
-        .insert(dbRows);
-  
-      if (error) throw error;
-    }
-  
+    const dbRows = dispatchBoxesToDb(entry);
+    if (dbRows.length > 0) await supabase.from('dispatch_boxes').insert(dbRows);
     setDataState((prev) => {
       const next = {
         ...prev,
         dispatches: isEdit
-          ? prev.dispatches.map((d) =>
-              d.id === entry.id ? savedEntry : d
-            )
-          : [...prev.dispatches, savedEntry],
+          ? prev.dispatches.map((d) => (d.id === entry.id ? entry : d))
+          : [...prev.dispatches, entry],
       };
-  
       dataRef.current = next;
       return next;
     });
@@ -1241,7 +738,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     for (const lot of sample.lots) await saveLot(lot);
     await supabase.from('history_events').insert({ module: 'System', action: 'Create', description: 'Sample data loaded' });
     setDataState((prev) => {
-      const next = { ...prev, history: [{ module: 'System', action: 'Create', description: 'Sample data loaded', timestamp: now() }, ...prev.history] };
+      const next = { ...prev, history: [{ id: uid('h_'), module: 'System', action: 'Create', description: 'Sample data loaded', timestamp: now() }, ...prev.history] };
       dataRef.current = next;
       return next;
     });

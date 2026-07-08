@@ -65,7 +65,7 @@ export default function FabricStock() {
       addHistory('Fabric Stock', 'Edit', `Updated fabric: ${form.name}`);
     } else {
       const colors: FabricColor[] = rawColors.map((c) => ({ ...c, id: uid('c_') }));
-      const fabric: Fabric = { name: form.name, unit: form.unit, colors, createdAt: now() };
+      const fabric: Fabric = { id: uid('f_'), name: form.name, unit: form.unit, colors, createdAt: now() };
       await saveFabric(fabric);
       addHistory('Fabric Stock', 'Create', `Created fabric: ${form.name} with ${colors.length} colors`);
     }
