@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { Box, Plus, Edit2, Trash2 } from 'lucide-react';
 import { useStore } from '../store/StoreContext';
 import { getLotColorSizePress } from '../store/calculations';
-import { uid, now, today, formatDate, formatNum, clone } from '../utils/helpers';
+import { now, today, formatDate, formatNum, clone } from '../utils/helpers';
 import type { PackingEntry, PackSizeBox, Size } from '../types';
 import PageHeader from '../components/PageHeader';
 import Modal from '../components/Modal';
@@ -192,7 +192,7 @@ export default function PackingEntryPage() {
       await savePackingEntry({ ...existing, lotId: form.lotId, date: form.date, pcsPerBox: form.pcsPerBox, boxes: form.boxes, notes: form.notes });
       addHistory('Packing', 'Edit', `Updated packing for lot ${lot.lotNo}`);
     } else {
-      const entry: PackingEntry = { id: uid('pk_'), lotId: form.lotId, pressingId: '', date: form.date, pcsPerBox: form.pcsPerBox, boxes: form.boxes, notes: form.notes, createdAt: now() };
+      const entry: PackingEntry = { id: '', lotId: form.lotId, pressingId: '', date: form.date, pcsPerBox: form.pcsPerBox, boxes: form.boxes, notes: form.notes, createdAt: now() };
       await savePackingEntry(entry);
       const totalBoxes = form.boxes.reduce((a, b) => a + b.boxes, 0);
       addHistory('Packing', 'Create', `Packing for lot ${lot.lotNo}: ${totalBoxes} boxes`);

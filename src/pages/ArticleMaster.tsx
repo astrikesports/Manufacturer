@@ -54,7 +54,7 @@ export default function ArticleMaster() {
       await saveArticle({ ...existing, code: form.code, name: form.name, fabricId: form.fabricId, consumption: form.consumption, consumptionSheet: form.consumptionSheet });
       addHistory('Article Master', 'Edit', `Updated article: ${form.code} - ${form.name}`);
     } else {
-      const article: Article = { id: uid('a_'), code: form.code, name: form.name, fabricId: form.fabricId, consumption: form.consumption, consumptionSheet: form.consumptionSheet, createdAt: now() };
+      const article: Article = { id: '', code: form.code, name: form.name, fabricId: form.fabricId, consumption: form.consumption, consumptionSheet: form.consumptionSheet, createdAt: now() };
       await saveArticle(article);
       addHistory('Article Master', 'Create', `Created article: ${form.code} - ${form.name}`);
     }
@@ -83,7 +83,7 @@ export default function ArticleMaster() {
 
   const addConsumptionRow = () => {
     const firstMat = data.rawMaterials[0];
-    setForm((f) => ({ ...f, consumptionSheet: [...f.consumptionSheet, { id: uid('cr_'), materialId: firstMat?.id ?? '', consumption: 0 }] }));
+    setForm((f) => ({ ...f, consumptionSheet: [...f.consumptionSheet, { id: uid(), materialId: firstMat?.id ?? '', consumption: 0 }] }));
   };
 
   const removeConsumptionRow = (rowId: string) => {

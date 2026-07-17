@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Truck, Plus, Edit2, Trash2 } from 'lucide-react';
 import { useStore } from '../store/StoreContext';
 import { getTotalBoxes, getDispatchedBoxes, getAvailableBoxes } from '../store/calculations';
-import { uid, now, today, formatDate, formatNum, clone } from '../utils/helpers';
+import { now, today, formatDate, formatNum, clone } from '../utils/helpers';
 import type { DispatchEntry, Size } from '../types';
 import PageHeader from '../components/PageHeader';
 import Modal from '../components/Modal';
@@ -82,7 +82,7 @@ export default function DispatchEntryPage() {
       await saveDispatchEntry({ ...existing, lotId: form.lotId, date: form.date, party: form.party, invoiceNo: form.invoiceNo, dispatchBoxes: validBoxes, type, notes: form.notes });
       addHistory('Dispatch', 'Edit', `Updated dispatch for lot ${lot.lotNo}: ${totalDispatched} boxes`);
     } else {
-      const entry: DispatchEntry = { id: uid('dsp_'), lotId: form.lotId, date: form.date, party: form.party, invoiceNo: form.invoiceNo, dispatchBoxes: validBoxes, type, notes: form.notes, createdAt: now() };
+      const entry: DispatchEntry = { id: '', lotId: form.lotId, date: form.date, party: form.party, invoiceNo: form.invoiceNo, dispatchBoxes: validBoxes, type, notes: form.notes, createdAt: now() };
       await saveDispatchEntry(entry);
       addHistory('Dispatch', 'Create', `Dispatch for lot ${lot.lotNo}: ${totalDispatched} boxes (${type})`);
     }

@@ -6,6 +6,7 @@ import {
   emptyColorSizeQty, colorSizeToMap, totalColorSizeQty,
 } from '../store/calculations';
 import { uid, now, today, formatDate, formatNum, clone } from '../utils/helpers';
+// stitching entries use text PKs so uid() is still valid for them
 import type { ColorSizeQty, Size, StitchingEntry, FinishingEntry, PressingEntry } from '../types';
 import Modal from '../components/Modal';
 import ConfirmDialog from '../components/ConfirmDialog';
@@ -98,7 +99,7 @@ export default function ProductionStage({ stage }: Props) {
         await saveFinishingEntry({ ...existing, lotId: form.lotId, date: form.date, colorSizes: form.colorSizes, notes: form.notes });
         addHistory(moduleLabel, 'Edit', `Updated ${moduleLabel.toLowerCase()} for lot ${lot.lotNo}`);
       } else {
-        const entry: FinishingEntry = { id: uid('fin_'), lotId: form.lotId, cuttingId: '', date: form.date, colorSizes: form.colorSizes, notes: form.notes, createdAt: now() };
+        const entry: FinishingEntry = { id: '', lotId: form.lotId, cuttingId: '', date: form.date, colorSizes: form.colorSizes, notes: form.notes, createdAt: now() };
         await saveFinishingEntry(entry);
         addHistory(moduleLabel, 'Create', `${moduleLabel} entry for lot ${lot.lotNo}: ${totalColorSizeQty(form.colorSizes)} pcs`);
       }
@@ -108,7 +109,7 @@ export default function ProductionStage({ stage }: Props) {
         await savePressingEntry({ ...existing, lotId: form.lotId, date: form.date, colorSizes: form.colorSizes, notes: form.notes });
         addHistory(moduleLabel, 'Edit', `Updated ${moduleLabel.toLowerCase()} for lot ${lot.lotNo}`);
       } else {
-        const entry: PressingEntry = { id: uid('prs_'), lotId: form.lotId, finishingId: '', date: form.date, colorSizes: form.colorSizes, notes: form.notes, createdAt: now() };
+        const entry: PressingEntry = { id: '', lotId: form.lotId, finishingId: '', date: form.date, colorSizes: form.colorSizes, notes: form.notes, createdAt: now() };
         await savePressingEntry(entry);
         addHistory(moduleLabel, 'Create', `${moduleLabel} entry for lot ${lot.lotNo}: ${totalColorSizeQty(form.colorSizes)} pcs`);
       }

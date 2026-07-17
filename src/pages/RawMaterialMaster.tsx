@@ -73,12 +73,12 @@ export default function RawMaterialMaster() {
       await saveRawMaterial({ ...existing, ...form });
       addHistory('Raw Material', 'Edit', `Updated material: ${form.name}`);
     } else {
-      const item: RawMaterial = { id: uid('rm_'), ...form, currentStock: form.openingStock ?? 0, createdAt: now() };
-      await saveRawMaterial(item);
+      const item: RawMaterial = { id: '', ...form, currentStock: form.openingStock ?? 0, createdAt: now() };
+      const savedItem = await saveRawMaterial(item);
       // Create opening stock transaction if provided
       if ((form.openingStock ?? 0) > 0) {
         const openingTx: RawMaterialTransaction = {
-          id: uid('tx_'), materialId: item.id, type: 'Opening',
+          id: uid('tx_'), materialId: savedItem.id, type: 'Opening',
           qty: form.openingStock ?? 0, notes: 'Opening stock', date: today(), createdAt: now(),
         };
         await saveRawMaterialTransaction(openingTx);

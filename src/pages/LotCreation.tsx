@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Layers, Plus, Edit2, Trash2, History, ChevronRight, ChevronDown, IndianRupee, TrendingUp, Wand2 } from 'lucide-react';
 import { useStore } from '../store/StoreContext';
 import { getLotCostSummary } from '../store/costing';
-import { uid, now, formatDate, formatNum, clone } from '../utils/helpers';
+import { now, formatDate, formatNum, clone } from '../utils/helpers';
 import { ALL_SIZES } from '../types';
 import type { Lot, Size, LotColorPlan, SizePlan } from '../types';
 import PageHeader from '../components/PageHeader';
@@ -198,7 +198,7 @@ export default function LotCreation() {
       addHistory('Lot Creation', 'Edit', `Updated lot: ${form.lotNo}`);
     } else {
       const lot: Lot = {
-        id: uid('l_'), lotNo: form.lotNo, articleId: form.articleId, fabricId: form.fabricId,
+        id: '', lotNo: form.lotNo, articleId: form.articleId, fabricId: form.fabricId,
         colorIds: form.colorIds, sizes: form.sizes, colorPlans: form.colorPlans, sizePlans: form.sizePlans,
         plannedProduction, sellingPricePerPcs: form.sellingPricePerPcs,
         status: 'Active', createdAt: now(),

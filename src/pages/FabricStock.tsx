@@ -3,7 +3,7 @@ import { Package, Plus, Edit2, Trash2, History, Layers, IndianRupee, PlusCircle 
 import { useStore } from '../store/StoreContext';
 import { getFabricBalance } from '../store/calculations';
 import { getFabricPrice } from '../store/costing';
-import { uid, now, formatNum, formatDate } from '../utils/helpers';
+import { now, formatNum, formatDate } from '../utils/helpers';
 import type { Fabric, FabricColor, Unit } from '../types';
 import PageHeader from '../components/PageHeader';
 import Modal from '../components/Modal';
@@ -24,15 +24,15 @@ export default function FabricStock() {
   const [addStockTarget, setAddStockTarget] = useState<AddStockTarget | null>(null);
   const [addStockForm, setAddStockForm] = useState({ rolls: 0, stock: 0 });
 
-  const [form, setForm] = useState<{ name: string; unit: Unit; colors: Omit<FabricColor, 'id'>[] }>({
+  const [form, setForm] = useState<{ name: string; unit: Unit; colors: { id: string; name: string; rolls: number; stock: number; used: number }[] }>({
     name: '',
     unit: 'KG',
-    colors: [{ name: '', rolls: 0, stock: 0, used: 0 }],
+    colors: [{ id: '', name: '', rolls: 0, stock: 0, used: 0 }],
   });
 
   const openCreate = () => {
     setEditId(null);
-    setForm({ name: '', unit: 'KG', colors: [{ name: '', rolls: 0, stock: 0, used: 0 }] });
+    setForm({ name: '', unit: 'KG', colors: [{ id: '', name: '', rolls: 0, stock: 0, used: 0 }] });
     setModalOpen(true);
   };
 
@@ -59,13 +59,13 @@ export default function FabricStock() {
       const existing = data.fabrics.find((f) => f.id === editId)!;
       const newColors: FabricColor[] = rawColors.map((nc) => {
         const found = existing.colors.find((ec) => ec.name.toLowerCase() === nc.name.toLowerCase());
-        return found ? { ...nc, id: found.id } : { ...nc, id: uid('c_') };
+        return found ? { ...nc, id: found.id } : { ...nc, id: '' };
       });
       await saveFabric({ ...existing, name: form.name, unit: form.unit, colors: newColors });
       addHistory('Fabric Stock', 'Edit', `Updated fabric: ${form.name}`);
     } else {
-      const colors: FabricColor[] = rawColors.map((c) => ({ ...c, id: uid('c_') }));
-      const fabric: Fabric = { id: uid('f_'), name: form.name, unit: form.unit, colors, createdAt: now() };
+      const colors: FabricColor[] = rawColors.map((c) => ({ ...c, id: '' }));
+      const fabric: Fabric = { id: '', name: form.name, unit: form.unit, colors, createdAt: now() };
       await saveFabric(fabric);
       addHistory('Fabric Stock', 'Create', `Created fabric: ${form.name} with ${colors.length} colors`);
     }
@@ -94,7 +94,7 @@ export default function FabricStock() {
     setDeleteId(null);
   };
 
-  const addColorRow = () => setForm((f) => ({ ...f, colors: [...f.colors, { name: '', rolls: 0, stock: 0, used: 0 }] }));
+  const addColorRow = () => setForm((f) => ({ ...f, colors: [...f.colors, { id: '', name: '', rolls: 0, stock: 0, used: 0 }] }));
   const removeColorRow = (i: number) => setForm((f) => ({ ...f, colors: f.colors.filter((_, idx) => idx !== i) }));
 
   return (

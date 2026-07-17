@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Scissors, Plus, Edit2, Trash2, History } from 'lucide-react';
 import { useStore } from '../store/StoreContext';
 import { emptyColorSizeQty, totalColorSizeQty } from '../store/calculations';
-import { uid, now, today, formatDate, formatNum, clone } from '../utils/helpers';
+import { now, today, formatDate, formatNum, clone } from '../utils/helpers';
 import type { CuttingEntry, ColorSizeQty, Size } from '../types';
 import PageHeader from '../components/PageHeader';
 import Modal from '../components/Modal';
@@ -60,7 +60,7 @@ export default function CuttingEntryPage() {
       await saveCuttingEntry({ ...existing, lotId: form.lotId, date: form.date, colorSizes: form.colorSizes, fabricUsed: form.fabricUsed, notes: form.notes });
       addHistory('Cutting Entry', 'Edit', `Updated cutting for lot ${lot.lotNo}`);
     } else {
-      const entry: CuttingEntry = { id: uid('cut_'), lotId: form.lotId, date: form.date, colorSizes: form.colorSizes, fabricUsed: form.fabricUsed, notes: form.notes, createdAt: now() };
+      const entry: CuttingEntry = { id: '', lotId: form.lotId, date: form.date, colorSizes: form.colorSizes, fabricUsed: form.fabricUsed, notes: form.notes, createdAt: now() };
       await saveCuttingEntry(entry);
       addHistory('Cutting Entry', 'Create', `Cutting entry for lot ${lot.lotNo}: ${totalCut} pcs (planned: ${lot.plannedProduction})`);
     }
