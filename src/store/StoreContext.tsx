@@ -233,29 +233,62 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const saveFabric = useCallback(async (fabric: Fabric) => {
     const isEdit = dataRef.current.fabrics.some((f) => f.id === fabric.id);
     let savedFabric = fabric;
-
+  
     if (isEdit) {
       await supabase.from('fabrics').update(fabricToDb(fabric)).eq('id', fabric.id);
-      await supabase.from('fabric_colors').delete().eq('fabric_id', fabric.id);
+  
+      // Update colors in-place to preserve their IDs (lot_color_plans references them)
+      const oldColors = dataRef.current.fabrics.find((f) => f.id === fabric.id)?.colors ?? [];
+      const oldColorIds = new Set(oldColors.map((c) => c.id));
+      const newColorIds = new Set(fabric.colors.map((c) => c.id));
+  
+      // Delete removed colors
+      const removedIds = oldColors.filter((c) => !newColorIds.has(c.id)).map((c) => c.id);
+      if (removedIds.length > 0) {
+        await supabase.from('fabric_colors').delete().in('id', removedIds);
+      }
+  
+      // Update existing colors in-place (preserves IDs)
+      for (const c of fabric.colors.filter((c) => oldColorIds.has(c.id))) {
+        await supabase.from('fabric_colors')
+          .update({ name: c.name, rolls: c.rolls, stock: c.stock, used: c.used })
+          .eq('id', c.id);
+      }
+  
+      // Insert genuinely new colors
+      const newColors = fabric.colors.filter((c) => !oldColorIds.has(c.id));
+      if (newColors.length > 0) {
+        const { data: insertedColors } = await Bolt Database
+          .from('fabric_colors')
+          .insert(newColors.map((c) => ({ fabric_id: fabric.id, name: c.name, rolls: c.rolls, stock: c.stock, used: c.used })))
+          .select('id, name');
+        if (insertedColors) {
+          const colorMap = new Map((insertedColors as { id: string; name: string }[]).map((r) => [r.name, r.id]));
+          savedFabric = {
+            ...savedFabric,
+            colors: savedFabric.colors.map((c) => oldColorIds.has(c.id) ? c : { ...c, id: colorMap.get(c.name) ?? c.id }),
+          };
+        }
+      }
     } else {
       const { data: row } = await supabase.from('fabrics').insert(fabricToDb(fabric)).select('id, created_at').maybeSingle();
       if (row) savedFabric = { ...fabric, id: (row as { id: string; created_at: string }).id, createdAt: (row as { id: string; created_at: string }).created_at };
-    }
-
-    if (savedFabric.colors.length > 0) {
-      const { data: insertedColors } = await supabase
-        .from('fabric_colors')
-        .insert(savedFabric.colors.map((c) => fabricColorToDb(c, savedFabric.id)))
-        .select('id, name');
-      if (insertedColors && !isEdit) {
-        const colorMap = new Map((insertedColors as { id: string; name: string }[]).map((r) => [r.name, r.id]));
-        savedFabric = {
-          ...savedFabric,
-          colors: savedFabric.colors.map((c) => ({ ...c, id: colorMap.get(c.name) ?? c.id })),
-        };
+  
+      if (savedFabric.colors.length > 0) {
+        const { data: insertedColors } = await Bolt Database
+          .from('fabric_colors')
+          .insert(savedFabric.colors.map((c) => fabricColorToDb(c, savedFabric.id)))
+          .select('id, name');
+        if (insertedColors) {
+          const colorMap = new Map((insertedColors as { id: string; name: string }[]).map((r) => [r.name, r.id]));
+          savedFabric = {
+            ...savedFabric,
+            colors: savedFabric.colors.map((c) => ({ ...c, id: colorMap.get(c.name) ?? c.id })),
+          };
+        }
       }
     }
-
+  
     setDataState((prev) => {
       const next = {
         ...prev,
@@ -267,6 +300,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       return next;
     });
   }, []);
+
 
   const deleteFabric = useCallback(async (fabricId: string) => {
     await supabase.from('fabrics').delete().eq('id', fabricId);
