@@ -80,7 +80,7 @@ interface StoreContextType {
 
 const StoreContext = createContext<StoreContextType | null>(null);
 
-async function loadFromSupabase(): Promise<AppData> {
+async function loadFromsupabase(): Promise<AppData> {
   const [
     { data: fabrics },
     { data: fabricColors },
@@ -188,7 +188,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    loadFromSupabase()
+    loadFromsupabase()
       .then((loaded) => {
         setDataFromLoad(loaded);
         supabase.from('app_settings').select('id').maybeSingle().then(({ data: s }) => {
@@ -854,7 +854,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     for (const lot of remappedLots) await saveLot(lot);
     await supabase.from('history_events').insert({ module: 'System', action: 'Create', description: 'Sample data loaded' });
     // Reload everything fresh
-    const loaded = await loadFromSupabase();
+    const loaded = await loadFromsupabase();
     setDataFromLoad(loaded);
   }, [resetData, saveFabric, saveRawMaterial, saveArticle, saveLot]);
 
