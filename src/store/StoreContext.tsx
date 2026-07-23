@@ -258,7 +258,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       // Insert genuinely new colors
       const newColors = fabric.colors.filter((c) => !oldColorIds.has(c.id));
       if (newColors.length > 0) {
-        const { data: insertedColors } = await Bolt Database
+        const { data: insertedColors } = await supabase
           .from('fabric_colors')
           .insert(newColors.map((c) => ({ fabric_id: fabric.id, name: c.name, rolls: c.rolls, stock: c.stock, used: c.used })))
           .select('id, name');
@@ -275,7 +275,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (row) savedFabric = { ...fabric, id: (row as { id: string; created_at: string }).id, createdAt: (row as { id: string; created_at: string }).created_at };
   
       if (savedFabric.colors.length > 0) {
-        const { data: insertedColors } = await Bolt Database
+        const { data: insertedColors } = await supabase
           .from('fabric_colors')
           .insert(savedFabric.colors.map((c) => fabricColorToDb(c, savedFabric.id)))
           .select('id, name');
