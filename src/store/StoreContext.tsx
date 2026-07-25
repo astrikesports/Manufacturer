@@ -520,13 +520,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const saveStitchingEntry = useCallback(async (entry: StitchingEntry) => {
     const isEdit = dataRef.current.stitchings.some((s) => s.id === entry.id);
     if (isEdit) {
-      await supabase.from('stitching_entries').update(stitchingEntryToDb(entry)).eq('id', entry.id);
-      await supabase.from('stitching_color_sizes').delete().eq('stitching_id', entry.id);
+      const { error: updErr } = await supabase.from('stitching_entries').update(stitchingEntryToDb(entry)).eq('id', entry.id);
+      if (updErr) throw new Error(updErr.message);
+      const { error: delErr } = await supabase.from('stitching_color_sizes').delete().eq('stitching_id', entry.id);
+      if (delErr) throw new Error(delErr.message);
     } else {
-      await supabase.from('stitching_entries').insert(stitchingEntryToDb(entry));
+      const { error: insErr } = await supabase.from('stitching_entries').insert(stitchingEntryToDb(entry));
+      if (insErr) throw new Error(insErr.message);
     }
     const csRows = stitchingColorSizesToDb(entry);
-    if (csRows.length > 0) await supabase.from('stitching_color_sizes').insert(csRows);
+    if (csRows.length > 0) {
+      const { error: csErr } = await supabase.from('stitching_color_sizes').insert(csRows);
+      if (csErr) throw new Error(csErr.message);
+    }
     setDataState((prev) => {
       const next = {
         ...prev,
@@ -540,7 +546,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const deleteStitchingEntry = useCallback(async (entryId: string) => {
-    await supabase.from('stitching_entries').delete().eq('id', entryId);
+    const { error } = await supabase.from('stitching_entries').delete().eq('id', entryId);
+    if (error) throw new Error(error.message);
     setDataState((prev) => {
       const next = { ...prev, stitchings: prev.stitchings.filter((s) => s.id !== entryId) };
       dataRef.current = next;
@@ -555,15 +562,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     let savedEntry = entry;
 
     if (isEdit) {
-      await supabase.from('finishing_entries').update(finishingEntryToDb(entry)).eq('id', entry.id);
-      await supabase.from('finishing_color_sizes').delete().eq('finishing_id', entry.id);
+      const { error: updErr } = await supabase.from('finishing_entries').update(finishingEntryToDb(entry)).eq('id', entry.id);
+      if (updErr) throw new Error(updErr.message);
+      const { error: delErr } = await supabase.from('finishing_color_sizes').delete().eq('finishing_id', entry.id);
+      if (delErr) throw new Error(delErr.message);
     } else {
-      const { data: row } = await supabase.from('finishing_entries').insert(finishingEntryToDb(entry)).select('id, created_at').maybeSingle();
+      const { data: row, error: insErr } = await supabase.from('finishing_entries').insert(finishingEntryToDb(entry)).select('id, created_at').maybeSingle();
+      if (insErr) throw new Error(insErr.message);
       if (row) savedEntry = { ...entry, id: (row as { id: string; created_at: string }).id, createdAt: (row as { id: string; created_at: string }).created_at };
     }
 
     const csRows = finishingColorSizesToDb(savedEntry);
-    if (csRows.length > 0) await supabase.from('finishing_color_sizes').insert(csRows);
+    if (csRows.length > 0) {
+      const { error: csErr } = await supabase.from('finishing_color_sizes').insert(csRows);
+      if (csErr) throw new Error(csErr.message);
+    }
 
     setDataState((prev) => {
       const next = {
@@ -578,7 +591,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const deleteFinishingEntry = useCallback(async (entryId: string) => {
-    await supabase.from('finishing_entries').delete().eq('id', entryId);
+    const { error } = await supabase.from('finishing_entries').delete().eq('id', entryId);
+    if (error) throw new Error(error.message);
     setDataState((prev) => {
       const next = { ...prev, finishings: prev.finishings.filter((f) => f.id !== entryId) };
       dataRef.current = next;
@@ -593,15 +607,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     let savedEntry = entry;
 
     if (isEdit) {
-      await supabase.from('pressing_entries').update(pressingEntryToDb(entry)).eq('id', entry.id);
-      await supabase.from('pressing_color_sizes').delete().eq('pressing_id', entry.id);
+      const { error: updErr } = await supabase.from('pressing_entries').update(pressingEntryToDb(entry)).eq('id', entry.id);
+      if (updErr) throw new Error(updErr.message);
+      const { error: delErr } = await supabase.from('pressing_color_sizes').delete().eq('pressing_id', entry.id);
+      if (delErr) throw new Error(delErr.message);
     } else {
-      const { data: row } = await supabase.from('pressing_entries').insert(pressingEntryToDb(entry)).select('id, created_at').maybeSingle();
+      const { data: row, error: insErr } = await supabase.from('pressing_entries').insert(pressingEntryToDb(entry)).select('id, created_at').maybeSingle();
+      if (insErr) throw new Error(insErr.message);
       if (row) savedEntry = { ...entry, id: (row as { id: string; created_at: string }).id, createdAt: (row as { id: string; created_at: string }).created_at };
     }
 
     const csRows = pressingColorSizesToDb(savedEntry);
-    if (csRows.length > 0) await supabase.from('pressing_color_sizes').insert(csRows);
+    if (csRows.length > 0) {
+      const { error: csErr } = await supabase.from('pressing_color_sizes').insert(csRows);
+      if (csErr) throw new Error(csErr.message);
+    }
 
     setDataState((prev) => {
       const next = {
@@ -616,7 +636,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const deletePressingEntry = useCallback(async (entryId: string) => {
-    await supabase.from('pressing_entries').delete().eq('id', entryId);
+    const { error } = await supabase.from('pressing_entries').delete().eq('id', entryId);
+    if (error) throw new Error(error.message);
     setDataState((prev) => {
       const next = { ...prev, pressings: prev.pressings.filter((p) => p.id !== entryId) };
       dataRef.current = next;

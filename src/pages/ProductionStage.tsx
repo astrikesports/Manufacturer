@@ -83,53 +83,61 @@ export default function ProductionStage({ stage }: Props) {
       }
     }
 
-    if (isStitching) {
-      if (editId) {
-        const existing = data.stitchings.find((e) => e.id === editId)!;
-        await saveStitchingEntry({ ...existing, lotId: form.lotId, date: form.date, colorSizes: form.colorSizes, notes: form.notes });
-        addHistory(moduleLabel, 'Edit', `Updated ${moduleLabel.toLowerCase()} for lot ${lot.lotNo}`);
+    try {
+      if (isStitching) {
+        if (editId) {
+          const existing = data.stitchings.find((e) => e.id === editId)!;
+          await saveStitchingEntry({ ...existing, lotId: form.lotId, date: form.date, colorSizes: form.colorSizes, notes: form.notes });
+          addHistory(moduleLabel, 'Edit', `Updated ${moduleLabel.toLowerCase()} for lot ${lot.lotNo}`);
+        } else {
+          const entry: StitchingEntry = { id: uid('stch_'), lotId: form.lotId, cuttingId: '', date: form.date, colorSizes: form.colorSizes, notes: form.notes, createdAt: now() };
+          await saveStitchingEntry(entry);
+          addHistory(moduleLabel, 'Create', `${moduleLabel} entry for lot ${lot.lotNo}: ${totalColorSizeQty(form.colorSizes)} pcs`);
+        }
+      } else if (isFinishing) {
+        if (editId) {
+          const existing = data.finishings.find((e) => e.id === editId)!;
+          await saveFinishingEntry({ ...existing, lotId: form.lotId, date: form.date, colorSizes: form.colorSizes, notes: form.notes });
+          addHistory(moduleLabel, 'Edit', `Updated ${moduleLabel.toLowerCase()} for lot ${lot.lotNo}`);
+        } else {
+          const entry: FinishingEntry = { id: '', lotId: form.lotId, cuttingId: '', date: form.date, colorSizes: form.colorSizes, notes: form.notes, createdAt: now() };
+          await saveFinishingEntry(entry);
+          addHistory(moduleLabel, 'Create', `${moduleLabel} entry for lot ${lot.lotNo}: ${totalColorSizeQty(form.colorSizes)} pcs`);
+        }
       } else {
-        const entry: StitchingEntry = { id: uid('stch_'), lotId: form.lotId, cuttingId: '', date: form.date, colorSizes: form.colorSizes, notes: form.notes, createdAt: now() };
-        await saveStitchingEntry(entry);
-        addHistory(moduleLabel, 'Create', `${moduleLabel} entry for lot ${lot.lotNo}: ${totalColorSizeQty(form.colorSizes)} pcs`);
+        if (editId) {
+          const existing = data.pressings.find((e) => e.id === editId)!;
+          await savePressingEntry({ ...existing, lotId: form.lotId, date: form.date, colorSizes: form.colorSizes, notes: form.notes });
+          addHistory(moduleLabel, 'Edit', `Updated ${moduleLabel.toLowerCase()} for lot ${lot.lotNo}`);
+        } else {
+          const entry: PressingEntry = { id: '', lotId: form.lotId, finishingId: '', date: form.date, colorSizes: form.colorSizes, notes: form.notes, createdAt: now() };
+          await savePressingEntry(entry);
+          addHistory(moduleLabel, 'Create', `${moduleLabel} entry for lot ${lot.lotNo}: ${totalColorSizeQty(form.colorSizes)} pcs`);
+        }
       }
-    } else if (isFinishing) {
-      if (editId) {
-        const existing = data.finishings.find((e) => e.id === editId)!;
-        await saveFinishingEntry({ ...existing, lotId: form.lotId, date: form.date, colorSizes: form.colorSizes, notes: form.notes });
-        addHistory(moduleLabel, 'Edit', `Updated ${moduleLabel.toLowerCase()} for lot ${lot.lotNo}`);
-      } else {
-        const entry: FinishingEntry = { id: '', lotId: form.lotId, cuttingId: '', date: form.date, colorSizes: form.colorSizes, notes: form.notes, createdAt: now() };
-        await saveFinishingEntry(entry);
-        addHistory(moduleLabel, 'Create', `${moduleLabel} entry for lot ${lot.lotNo}: ${totalColorSizeQty(form.colorSizes)} pcs`);
-      }
-    } else {
-      if (editId) {
-        const existing = data.pressings.find((e) => e.id === editId)!;
-        await savePressingEntry({ ...existing, lotId: form.lotId, date: form.date, colorSizes: form.colorSizes, notes: form.notes });
-        addHistory(moduleLabel, 'Edit', `Updated ${moduleLabel.toLowerCase()} for lot ${lot.lotNo}`);
-      } else {
-        const entry: PressingEntry = { id: '', lotId: form.lotId, finishingId: '', date: form.date, colorSizes: form.colorSizes, notes: form.notes, createdAt: now() };
-        await savePressingEntry(entry);
-        addHistory(moduleLabel, 'Create', `${moduleLabel} entry for lot ${lot.lotNo}: ${totalColorSizeQty(form.colorSizes)} pcs`);
-      }
+      setModalOpen(false);
+    } catch (err) {
+      alert(`Failed to save ${moduleLabel.toLowerCase()} entry: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
-    setModalOpen(false);
   };
 
   const confirmDelete = async () => {
     if (!deleteId) return;
     const entry = entries.find((e) => e.id === deleteId);
     const lot = data.lots.find((l) => l.id === entry?.lotId);
-    if (isStitching) {
-      await deleteStitchingEntry(deleteId);
-    } else if (isFinishing) {
-      await deleteFinishingEntry(deleteId);
-    } else {
-      await deletePressingEntry(deleteId);
+    try {
+      if (isStitching) {
+        await deleteStitchingEntry(deleteId);
+      } else if (isFinishing) {
+        await deleteFinishingEntry(deleteId);
+      } else {
+        await deletePressingEntry(deleteId);
+      }
+      addHistory(moduleLabel, 'Delete', `Deleted ${moduleLabel.toLowerCase()} for lot ${lot?.lotNo}`);
+      setDeleteId(null);
+    } catch (err) {
+      alert(`Failed to delete ${moduleLabel.toLowerCase()} entry: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
-    addHistory(moduleLabel, 'Delete', `Deleted ${moduleLabel.toLowerCase()} for lot ${lot?.lotNo}`);
-    setDeleteId(null);
   };
 
   const colorName = (fabricId: string, colorId: string) => data.fabrics.find((f) => f.id === fabricId)?.colors.find((c) => c.id === colorId)?.name ?? '—';
