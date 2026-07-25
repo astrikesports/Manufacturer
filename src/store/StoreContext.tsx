@@ -519,26 +519,34 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const saveStitchingEntry = useCallback(async (entry: StitchingEntry) => {
     const isEdit = dataRef.current.stitchings.some((s) => s.id === entry.id);
+    let savedEntry = entry;
+
     if (isEdit) {
-      const { error: updErr } = await supabase.from('stitching_entries').update(stitchingEntryToDb(entry)).eq('id', entry.id);
-      if (updErr) throw new Error(updErr.message);
+      const payload = stitchingEntryToDb(entry);
+      const { error: updErr } = await supabase.from('stitching_entries').update(payload).eq('id', entry.id);
+      if (updErr) { console.error('Stitching Update Payload:', payload); console.error('Supabase Error:', updErr); throw new Error(updErr.message); }
       const { error: delErr } = await supabase.from('stitching_color_sizes').delete().eq('stitching_id', entry.id);
-      if (delErr) throw new Error(delErr.message);
+      if (delErr) { console.error('Supabase Error:', delErr); throw new Error(delErr.message); }
     } else {
-      const { error: insErr } = await supabase.from('stitching_entries').insert(stitchingEntryToDb(entry));
-      if (insErr) throw new Error(insErr.message);
+      const payload = stitchingEntryToDb(entry);
+      console.log('Stitching Insert Payload:', payload);
+      const { data: row, error: insErr } = await supabase.from('stitching_entries').insert(payload).select('id, created_at').single();
+      if (insErr) { console.error('Stitching Payload:', payload); console.error('Supabase Error:', insErr); throw new Error(insErr.message); }
+      if (row) savedEntry = { ...entry, id: (row as { id: string; created_at: string }).id, createdAt: (row as { id: string; created_at: string }).created_at };
     }
-    const csRows = stitchingColorSizesToDb(entry);
+
+    const csRows = stitchingColorSizesToDb(savedEntry.id, savedEntry.colorSizes);
     if (csRows.length > 0) {
       const { error: csErr } = await supabase.from('stitching_color_sizes').insert(csRows);
-      if (csErr) throw new Error(csErr.message);
+      if (csErr) { console.error('Stitching CS Payload:', csRows); console.error('Supabase Error:', csErr); throw new Error(csErr.message); }
     }
+
     setDataState((prev) => {
       const next = {
         ...prev,
         stitchings: isEdit
-          ? prev.stitchings.map((s) => (s.id === entry.id ? entry : s))
-          : [...prev.stitchings, entry],
+          ? prev.stitchings.map((s) => (s.id === entry.id ? savedEntry : s))
+          : [...prev.stitchings, savedEntry],
       };
       dataRef.current = next;
       return next;
@@ -813,7 +821,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       supabase.from('packing_entries').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
       supabase.from('pressing_entries').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
       supabase.from('finishing_entries').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
-      supabase.from('stitching_entries').delete().neq('id', 'x'),
+      supabase.from('stitching_entries').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
       supabase.from('cutting_entries').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
       supabase.from('cut_pcs_entries').delete().neq('id', 'x'),
       supabase.from('raw_material_transactions').delete().neq('id', 'x'),

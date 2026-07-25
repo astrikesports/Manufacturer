@@ -279,12 +279,16 @@ export function rawMaterialToDb(m: RawMaterial) {
 }
 
 export function stitchingEntryToDb(e: StitchingEntry) {
-  return { id: e.id, lot_id: e.lotId, cutting_id: e.cuttingId || null, date: e.date, notes: e.notes ?? '' };
+  return { lot_id: e.lotId, cutting_id: e.cuttingId || null, date: e.date, notes: e.notes ?? '' };
 }
 
-export function stitchingColorSizesToDb(e: StitchingEntry) {
-  return e.colorSizes.flatMap((cs) =>
-    cs.sizes.map((s) => ({ stitching_id: e.id, color_id: cs.colorId, size: s.size, qty: s.qty }))
+export function stitchingEntryToDbUpdate(e: StitchingEntry) {
+  return { lot_id: e.lotId, cutting_id: e.cuttingId || null, date: e.date, notes: e.notes ?? '' };
+}
+
+export function stitchingColorSizesToDb(stitchingId: string, colorSizes: ColorSizeQty[]) {
+  return colorSizes.flatMap((cs) =>
+    cs.sizes.map((s) => ({ stitching_id: stitchingId, color_id: cs.colorId, size: s.size, qty: s.qty }))
   );
 }
 
