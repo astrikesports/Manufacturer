@@ -184,8 +184,9 @@ export default function RawMaterialMaster() {
                     <th className="th">Item Name</th>
                     <th className="th">Category</th>
                     <th className="th">Unit</th>
-                    <th className="th text-right">Price (₹)</th>
+                    <th className="th text-right">Base Price</th>
                     <th className="th text-right">GST%</th>
+                    <th className="th text-right">Price (incl. GST)</th>
                     <th className="th text-right">Current Stock</th>
                     <th className="th text-right">Min Stock</th>
                     <th className="th">Status</th>
@@ -198,13 +199,18 @@ export default function RawMaterialMaster() {
                     return (
                       <tr key={item.id} className="hover:bg-slate-50">
                         <td className="td font-medium text-slate-800">
-                          {item.name}
-                          {item.remarks && <p className="text-xs text-slate-400 mt-0.5">{item.remarks}</p>}
+                          <div className="flex items-center gap-2">
+                            <span className="truncate max-w-[180px]" title={item.name}>{item.name}</span>
+                          </div>
+                          {item.remarks && (
+                            <p className="text-xs text-slate-400 mt-0.5 truncate max-w-[220px]" title={item.remarks}>{item.remarks}</p>
+                          )}
                         </td>
                         <td className="td"><span className={`badge ${catColor[item.category]}`}>{item.category}</span></td>
                         <td className="td text-slate-600">{item.unit}</td>
                         <td className="td text-right font-medium">₹{formatPrice(item.purchasePrice)}</td>
                         <td className="td text-right text-slate-600">{formatNum(item.gst)}%</td>
+                        <td className="td text-right font-semibold text-brand-700">₹{formatPrice(item.purchasePrice * (1 + (item.gst || 0) / 100))}</td>
                         <td className="td text-right">
                           <span className={`font-semibold ${isLow ? 'text-err-600' : 'text-slate-800'}`}>
                             {formatNum(item.currentStock)}
