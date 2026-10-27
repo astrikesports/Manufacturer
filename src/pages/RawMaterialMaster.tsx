@@ -39,6 +39,7 @@ export default function RawMaterialMaster() {
   const [deleteTxId, setDeleteTxId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [filterCat, setFilterCat] = useState<MaterialCategory | 'All'>('All');
+  const [filterArticleId, setFilterArticleId] = useState<string>('All');
 
   const [form, setForm] = useState<Omit<RawMaterial, 'id' | 'createdAt' | 'currentStock'>>({
     name: '', category: 'Fabric', unit: 'KG', purchasePrice: 0, supplier: '', gst: 0,
@@ -121,10 +122,15 @@ export default function RawMaterialMaster() {
     setDeleteTxId(null);
   };
 
+  const selectedArticle = data.articles.find((a) => a.id === filterArticleId);
+  const articleMaterialIds = selectedArticle
+    ? new Set(selectedArticle.consumptionSheet.map((row) => row.materialId).filter(Boolean))
+    : null;
   const filtered = data.rawMaterials.filter((m) => {
     const matchSearch = m.name.toLowerCase().includes(search.toLowerCase()) || m.supplier.toLowerCase().includes(search.toLowerCase());
     const matchCat = filterCat === 'All' || m.category === filterCat;
-    return matchSearch && matchCat;
+    const matchArticle = !articleMaterialIds || articleMaterialIds.has(m.id);
+    return matchSearch && matchCat && matchArticle;
   });
 
   const catColor: Record<MaterialCategory, string> = {
@@ -170,6 +176,12 @@ export default function RawMaterialMaster() {
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input className="input pl-10" placeholder="Search by name or supplier..." value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>
+            <select className="input sm:w-56" value={filterArticleId} onChange={(e) => setFilterArticleId(e.target.value)}>
+              <option value="All">All Articles · All Materials</option>
+              {data.articles.filter((a) => a.isCurrent !== false).sort((a, b) => a.code.localeCompare(b.code)).map((a) => (
+                <option key={a.id} value={a.id}>{a.code} — {a.name}{a.versionNumber ? ` (V${a.versionNumber})` : ''}</option>
+              ))}
+            </select>
             <select className="input sm:w-48" value={filterCat} onChange={(e) => setFilterCat(e.target.value as MaterialCategory | 'All')}>
               <option value="All">All Categories</option>
               {ALL_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
@@ -229,6 +241,7 @@ export default function RawMaterialMaster() {
                       </tr>
                     );
                   })}
+                  {filtered.length === 0 && <tr><td colSpan={10} className="td text-center text-slate-400 py-8">No materials linked to this article. Add materials in the Article Master consumption sheet, or choose All Articles.</td></tr>}
                 </tbody>
               </table>
             </div>
