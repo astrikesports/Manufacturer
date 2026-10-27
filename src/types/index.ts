@@ -62,6 +62,9 @@ export interface ConsumptionRow {
   id: string;
   materialId: string;
   consumption: number;
+  /** Frozen standard rate captured when this article version was created. */
+  unitRate?: number;
+  gstRate?: number;
 }
 
 export interface Article {
@@ -72,6 +75,10 @@ export interface Article {
   consumption: SizeConsumption[];
   consumptionSheet: ConsumptionRow[];
   createdAt: string;
+  /** All versions share one base article identity; legacy rows default to themselves. */
+  baseArticleId?: string;
+  versionNumber?: number;
+  isCurrent?: boolean;
 }
 
 export interface LotColorPlan {

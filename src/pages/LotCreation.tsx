@@ -332,7 +332,7 @@ export default function LotCreation() {
               <label className="label">Article</label>
               <select className="input" value={form.articleId} onChange={(e) => onArticleChange(e.target.value)}>
                 <option value="">Select article</option>
-                {data.articles.map((a) => <option key={a.id} value={a.id}>{a.code} - {a.name}</option>)}
+                {data.articles.filter((a) => (a.isCurrent ?? true) || a.id === form.articleId).map((a) => <option key={a.id} value={a.id}>{a.code} - {a.name}</option>)}
               </select>
             </div>
           </div>

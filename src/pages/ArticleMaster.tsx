@@ -40,21 +40,29 @@ export default function ArticleMaster() {
 
   const openEdit = (article: Article) => {
     setEditId(article.id);
-    setForm({ code: article.code, name: article.name, fabricId: article.fabricId, consumption: clone(article.consumption), consumptionSheet: clone(article.consumptionSheet) });
+    setForm({ code: article.code, name: article.name, fabricId: article.fabricId, consumption: clone(article.consumption), consumptionSheet: clone(article.consumptionSheet).map((r) => ({ ...r, unitRate: r.unitRate ?? data.rawMaterials.find((m) => m.id === r.materialId)?.purchasePrice ?? 0, gstRate: r.gstRate ?? data.rawMaterials.find((m) => m.id === r.materialId)?.gst ?? 0 })) });
     setModalOpen(true);
   };
 
   const save = async () => {
     if (!form.code.trim() || !form.name.trim() || !form.fabricId) { alert('Fill all required fields'); return; }
-    const dup = data.articles.find((a) => a.code.toLowerCase() === form.code.toLowerCase() && a.id !== editId);
-    if (dup) { alert('Article code already exists'); return; }
+    if (!editId) {
+      const dup = data.articles.find((a) => a.code.toLowerCase() === form.code.toLowerCase() && (a.isCurrent ?? true));
+      if (dup) { alert('Article code already exists'); return; }
+    }
 
+    const frozenSheet = form.consumptionSheet.map((r) => {
+      const material = data.rawMaterials.find((m) => m.id === r.materialId);
+      return { ...r, unitRate: material?.purchasePrice ?? r.unitRate ?? 0, gstRate: material?.gst ?? r.gstRate ?? 0 };
+    });
     if (editId) {
       const existing = data.articles.find((a) => a.id === editId)!;
-      await saveArticle({ ...existing, code: form.code, name: form.name, fabricId: form.fabricId, consumption: form.consumption, consumptionSheet: form.consumptionSheet });
-      addHistory('Article Master', 'Edit', `Updated article: ${form.code} - ${form.name}`);
+      const baseId = existing.baseArticleId || existing.id;
+      const versionNumber = Math.max(1, ...data.articles.filter((a) => (a.baseArticleId || a.id) === baseId).map((a) => a.versionNumber ?? 1)) + 1;
+      await saveArticle({ id: '', baseArticleId: baseId, versionNumber, isCurrent: true, code: existing.code, name: form.name, fabricId: form.fabricId, consumption: form.consumption, consumptionSheet: frozenSheet, createdAt: now() });
+      addHistory('Article Master', 'Edit', `Created version V${versionNumber} for article: ${existing.code} - ${form.name}`);
     } else {
-      const article: Article = { id: '', code: form.code, name: form.name, fabricId: form.fabricId, consumption: form.consumption, consumptionSheet: form.consumptionSheet, createdAt: now() };
+      const article: Article = { id: '', code: form.code, name: form.name, fabricId: form.fabricId, consumption: form.consumption, consumptionSheet: frozenSheet, versionNumber: 1, isCurrent: true, createdAt: now() };
       await saveArticle(article);
       addHistory('Article Master', 'Create', `Created article: ${form.code} - ${form.name}`);
     }
@@ -83,7 +91,7 @@ export default function ArticleMaster() {
 
   const addConsumptionRow = () => {
     const firstMat = data.rawMaterials[0];
-    setForm((f) => ({ ...f, consumptionSheet: [...f.consumptionSheet, { id: uid(), materialId: firstMat?.id ?? '', consumption: 0 }] }));
+    setForm((f) => ({ ...f, consumptionSheet: [...f.consumptionSheet, { id: uid(), materialId: firstMat?.id ?? '', consumption: 0, unitRate: firstMat?.purchasePrice ?? 0, gstRate: firstMat?.gst ?? 0 }] }));
   };
 
   const removeConsumptionRow = (rowId: string) => {
@@ -95,7 +103,7 @@ export default function ArticleMaster() {
       ...f,
       consumptionSheet: f.consumptionSheet.map((r) => {
         if (r.id !== rowId) return r;
-        if (field === 'materialId') return { ...r, materialId: val as string };
+        if (field === 'materialId') { const material = data.rawMaterials.find((m) => m.id === val); return { ...r, materialId: val as string, unitRate: material?.purchasePrice ?? 0, gstRate: material?.gst ?? 0 }; }
         return { ...r, consumption: val as number };
       }),
     }));
@@ -120,7 +128,7 @@ export default function ArticleMaster() {
           action={<button className="btn-primary" onClick={openCreate}><Plus size={18} /> Add Article</button>} />
       ) : (
         <div className="space-y-3">
-          {data.articles.map((article) => {
+          {data.articles.filter((a) => a.isCurrent ?? true).map((article) => {
             const summary = getArticleCostSummary(data, article);
             const expanded = expandedIds.has(article.id);
             return (
@@ -171,7 +179,7 @@ export default function ArticleMaster() {
                         <tbody className="divide-y divide-slate-100">
                           {article.consumptionSheet.map((row) => {
                             const mat = data.rawMaterials.find((m) => m.id === row.materialId);
-                            const rate = mat?.purchasePrice ?? 0;
+                            const rate = row.unitRate ?? mat?.purchasePrice ?? 0;
                             const cost = row.consumption * rate;
                             return (
                               <tr key={row.id} className="hover:bg-slate-50">
@@ -280,7 +288,7 @@ export default function ArticleMaster() {
                   <tbody className="divide-y divide-slate-100">
                     {form.consumptionSheet.map((row) => {
                       const mat = data.rawMaterials.find((m) => m.id === row.materialId);
-                      const rate = mat?.purchasePrice ?? 0;
+                      const rate = row.unitRate ?? mat?.purchasePrice ?? 0;
                       const cost = row.consumption * rate;
                       return (
                         <tr key={row.id}>
@@ -342,6 +350,14 @@ export default function ArticleMaster() {
 
       <Modal open={!!historyArticle} onClose={() => setHistoryArticle(null)} title={`History — ${historyArticle?.code ?? ''}`} size="md">
         <div className="space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Article Versions</p>
+          {data.articles.filter((a) => (a.baseArticleId || a.id) === (historyArticle?.baseArticleId || historyArticle?.id)).sort((a, b) => (b.versionNumber ?? 1) - (a.versionNumber ?? 1)).map((version) => (
+            <div key={version.id} className="flex items-center justify-between gap-3 p-3 rounded-lg border border-slate-200">
+              <div><p className="text-sm font-medium text-slate-800">{version.code} — V{version.versionNumber ?? 1}</p><p className="text-xs text-slate-500">{formatDate(version.createdAt)} · {version.consumptionSheet.length} materials</p></div>
+              <span className={`badge ${version.isCurrent ? 'bg-accent-100 text-accent-700' : 'bg-slate-100 text-slate-600'}`}>{version.isCurrent ? 'Current' : 'Archived'}</span>
+            </div>
+          ))}
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mt-4">Change Log</p>
           {data.history.filter((h) => h.module === 'Article Master').length === 0 ? (
             <p className="text-sm text-slate-500 text-center py-8">No history recorded.</p>
           ) : (

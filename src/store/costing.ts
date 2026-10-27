@@ -41,8 +41,8 @@ const CATEGORY_LIST: MaterialCategory[] = ['Fabric', 'Thread', 'Elastic', 'Zip',
 export function getArticleCostSummary(data: AppData, article: Article): ArticleCostSummary {
   const rows: RowCost[] = article.consumptionSheet.map((row) => {
     const material = data.rawMaterials.find((m) => m.id === row.materialId);
-    const rate = material?.purchasePrice ?? 0;
-    const gst = material?.gst ?? 0;
+    const rate = row.unitRate ?? material?.purchasePrice ?? 0;
+    const gst = row.gstRate ?? material?.gst ?? 0;
     const lineCost = row.consumption * rate;
     const lineGst = lineCost * gst / 100;
     return { row, material, rate, gst, lineCost, lineGst, lineNetCost: lineCost + lineGst };
@@ -146,7 +146,7 @@ export function getLotCostSummary(data: AppData, lotId: string): LotCostSummary 
 
   const requirements: LotMaterialRequirement[] = article.consumptionSheet.map((row) => {
     const material = data.rawMaterials.find((m) => m.id === row.materialId);
-    const rate = material?.purchasePrice ?? 0;
+    const rate = row.unitRate ?? material?.purchasePrice ?? 0;
     const requiredQty = row.consumption * qty;
     const totalCost = requiredQty * rate;
     return { row, material, perPiece: row.consumption, requiredQty, rate, totalCost };

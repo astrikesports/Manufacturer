@@ -74,7 +74,7 @@ export function dbToArticle(
 
   const consumptionSheet: ConsumptionRow[] = materialRows
     .filter((m) => m.article_id === row.id)
-    .map((m) => ({ id: m.id, materialId: m.material_id, consumption: Number(m.consumption) }));
+    .map((m) => ({ id: m.id, materialId: m.material_id, consumption: Number(m.consumption), unitRate: m.unit_rate == null ? undefined : Number(m.unit_rate), gstRate: m.gst_rate == null ? undefined : Number(m.gst_rate) }));
 
   return {
     id: row.id,
@@ -84,6 +84,9 @@ export function dbToArticle(
     consumption,
     consumptionSheet,
     createdAt: row.created_at,
+    baseArticleId: row.base_article_id ?? row.id,
+    versionNumber: row.version_number ?? 1,
+    isCurrent: row.is_current ?? true,
   };
 }
 
@@ -293,7 +296,7 @@ export function stitchingColorSizesToDb(stitchingId: string, colorSizes: ColorSi
 }
 
 export function articleToDb(a: Article) {
-  return { code: a.code, name: a.name, fabric_id: a.fabricId };
+  return { code: a.code, name: a.name, fabric_id: a.fabricId, base_article_id: a.baseArticleId ?? null, version_number: a.versionNumber ?? 1, is_current: a.isCurrent ?? true };
 }
 
 export function articleSizeConsumptionToDb(a: Article) {
@@ -302,7 +305,7 @@ export function articleSizeConsumptionToDb(a: Article) {
 
 export function articleMaterialConsumptionToDb(a: Article) {
   return a.consumptionSheet.map((cr) => ({
-    article_id: a.id, material_id: cr.materialId, consumption: cr.consumption,
+    article_id: a.id, material_id: cr.materialId, consumption: cr.consumption, unit_rate: cr.unitRate ?? 0, gst_rate: cr.gstRate ?? 0,
   }));
 }
 

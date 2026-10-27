@@ -60,6 +60,9 @@ export interface DbArticle {
   fabric_id: string;
   created_at: string;
   updated_at: string;
+  base_article_id?: string | null;
+  version_number?: number | null;
+  is_current?: boolean | null;
 }
 
 export interface DbArticleSizeConsumption {
@@ -76,6 +79,8 @@ export interface DbArticleMaterialConsumption {
   article_id: string;
   material_id: string;
   consumption: number;
+  unit_rate?: number | null;
+  gst_rate?: number | null;
   created_at: string;
   updated_at: string;
 }

@@ -389,39 +389,58 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // ── Article ────────────────────────────────────────────────────────────────
 
   const saveArticle = useCallback(async (article: Article) => {
-    const isEdit = dataRef.current.articles.some((a) => a.id === article.id);
+    const existingId = article.id && dataRef.current.articles.some((a) => a.id === article.id) ? article.id : null;
+    const isNewVersion = !existingId && !!article.baseArticleId;
     let savedArticle = article;
 
-    if (isEdit) {
-      await supabase.from('articles').update(articleToDb(article)).eq('id', article.id);
-      await supabase.from('article_size_consumption').delete().eq('article_id', article.id);
-      await supabase.from('article_material_consumption').delete().eq('article_id', article.id);
+    if (existingId) {
+      // Retained for internal imports/legacy callers. Article Master edits create a new version instead.
+      const { error: updateError } = await supabase.from('articles').update(articleToDb(article)).eq('id', existingId);
+      if (updateError) throw updateError;
+      await supabase.from('article_size_consumption').delete().eq('article_id', existingId);
+      await supabase.from('article_material_consumption').delete().eq('article_id', existingId);
     } else {
-      const { data: row } = await supabase.from('articles').insert(articleToDb(article)).select('id, created_at').maybeSingle();
-      if (row) savedArticle = { ...article, id: (row as { id: string; created_at: string }).id, createdAt: (row as { id: string; created_at: string }).created_at };
+      const rowData = articleToDb(article);
+      const { data: row, error: insertError } = await supabase.from('articles').insert(rowData).select('id, created_at').single();
+      if (insertError) throw insertError;
+      const insertedId = (row as { id: string; created_at: string }).id;
+      const baseArticleId = article.baseArticleId || insertedId;
+      if (!article.baseArticleId) {
+        const { error: baseError } = await supabase.from('articles').update({ base_article_id: baseArticleId }).eq('id', insertedId);
+        if (baseError) throw baseError;
+      }
+      savedArticle = { ...article, id: insertedId, baseArticleId, createdAt: (row as { id: string; created_at: string }).created_at, isCurrent: true };
+
+      if (isNewVersion) {
+        // Keep old article rows and their consumption rows immutable; only mark the previous current version inactive.
+        const { error: previousError } = await supabase.from('articles').update({ is_current: false }).eq('base_article_id', baseArticleId).eq('is_current', true).neq('id', insertedId);
+        if (previousError) throw previousError;
+      }
     }
 
     const sizeRows = articleSizeConsumptionToDb(savedArticle);
-    if (sizeRows.length > 0) await supabase.from('article_size_consumption').insert(sizeRows);
+    if (sizeRows.length > 0) {
+      const { error } = await supabase.from('article_size_consumption').insert(sizeRows);
+      if (error) throw error;
+    }
     const matRows = articleMaterialConsumptionToDb(savedArticle);
     if (matRows.length > 0) {
-      const { data: insertedMats } = await supabase.from('article_material_consumption').insert(matRows).select('id, material_id');
-      if (insertedMats && !isEdit) {
+      const { data: insertedMats, error } = await supabase.from('article_material_consumption').insert(matRows).select('id, material_id');
+      if (error) throw error;
+      if (insertedMats) {
         const matMap = new Map((insertedMats as { id: string; material_id: string }[]).map((r) => [r.material_id, r.id]));
-        savedArticle = {
-          ...savedArticle,
-          consumptionSheet: savedArticle.consumptionSheet.map((cr) => ({ ...cr, id: matMap.get(cr.materialId) ?? cr.id })),
-        };
+        savedArticle = { ...savedArticle, consumptionSheet: savedArticle.consumptionSheet.map((cr) => ({ ...cr, id: matMap.get(cr.materialId) ?? cr.id })) };
       }
     }
 
     setDataState((prev) => {
-      const next = {
-        ...prev,
-        articles: isEdit
-          ? prev.articles.map((a) => (a.id === article.id ? savedArticle : a))
-          : [...prev.articles, savedArticle],
-      };
+      let articles = prev.articles;
+      if (existingId) articles = articles.map((a) => a.id === existingId ? savedArticle : a);
+      else {
+        if (isNewVersion) articles = articles.map((a) => (a.baseArticleId || a.id) === savedArticle.baseArticleId ? { ...a, isCurrent: false } : a);
+        articles = [...articles, savedArticle];
+      }
+      const next = { ...prev, articles };
       dataRef.current = next;
       return next;
     });
