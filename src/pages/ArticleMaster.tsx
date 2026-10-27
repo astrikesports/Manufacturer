@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Shirt, Plus, Edit2, Trash2, History, IndianRupee, ChevronDown, ChevronRight } from 'lucide-react';
+import { Shirt, Plus, Edit2, Trash2, History, IndianRupee, ChevronDown, ChevronRight, Download } from 'lucide-react';
 import { useStore } from '../store/StoreContext';
 import { getArticleCostSummary } from '../store/costing';
 import { uid, now, formatDate, formatNum } from '../utils/helpers';
@@ -111,6 +111,54 @@ export default function ArticleMaster() {
 
   const fabricName = (id: string) => data.fabrics.find((f) => f.id === id)?.name ?? '—';
 
+  const downloadExcel = () => {
+    const escapeHtml = (value: unknown) => String(value ?? '')
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    const headers = [
+      'Article Code', 'Article Name', 'Version', 'Version Status', 'Fabric', 'Size',
+      'Fabric Consumption', 'Material', 'Material Category', 'Material Consumption',
+      'Unit', 'Unit Rate (INR)', 'GST (%)', 'Material Cost Per Piece (INR)',
+      'Total Material Cost Per Piece (INR)', 'Total Cost Per Piece (INR)', 'Created At',
+    ];
+    const rows: unknown[][] = [];
+    const articles = [...data.articles].sort((a, b) =>
+      a.code.localeCompare(b.code) || (a.versionNumber ?? 1) - (b.versionNumber ?? 1));
+
+    for (const article of articles) {
+      const summary = getArticleCostSummary(data, article);
+      const fabric = data.fabrics.find((f) => f.id === article.fabricId);
+      const materialRows = article.consumptionSheet.length ? article.consumptionSheet : [null];
+      const sizeRows = article.consumption.length ? article.consumption : [null];
+      for (const sizeRow of sizeRows) {
+        for (const row of materialRows) {
+          const material = row ? data.rawMaterials.find((m) => m.id === row.materialId) : undefined;
+          const rate = row?.unitRate ?? material?.purchasePrice ?? 0;
+          rows.push([
+            article.code, article.name, `V${article.versionNumber ?? 1}`,
+            (article.isCurrent ?? true) ? 'Current' : 'Archived', fabric?.name ?? '',
+            sizeRow?.size ?? '', sizeRow?.consumption ?? '', material?.name ?? '',
+            material?.category ?? '', row?.consumption ?? '', material?.unit ?? '',
+            rate, row?.gstRate ?? material?.gst ?? 0,
+            row ? row.consumption * rate : 0, summary.totalMaterialCost,
+            summary.costPerPiece, article.createdAt,
+          ]);
+        }
+      }
+    }
+    const table = `<table><thead><tr>${headers.map((h) => `<th>${escapeHtml(h)}</th>`).join('')}</tr></thead><tbody>${rows.map((row) => `<tr>${row.map((v) => `<td>${escapeHtml(v)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body>${table}</body></html>`;
+    const blob = new Blob([`\ufeff${html}`], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `Article-Master-${new Date().toISOString().slice(0, 10)}.xls`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+
   const liveCostSummary = form.consumptionSheet.length > 0
     ? getArticleCostSummary(
         { ...data, articles: [{ id: '_form', code: form.code, name: form.name, fabricId: form.fabricId, consumption: form.consumption, consumptionSheet: form.consumptionSheet, createdAt: now() }] },
@@ -122,6 +170,11 @@ export default function ArticleMaster() {
     <div>
       <PageHeader title="Article Master" subtitle="Define articles with size-wise fabric consumption and full consumption sheet" icon={<Shirt size={22} />}
         action={{ label: 'Add Article', onClick: openCreate }} />
+      <div className="flex justify-end mb-3">
+        <button type="button" className="btn-secondary" onClick={downloadExcel} disabled={data.articles.length === 0}>
+          <Download size={16} /> Download Excel
+        </button>
+      </div>
 
       {data.articles.length === 0 ? (
         <EmptyState icon={<Shirt size={40} />} title="No articles yet" message="Create an article with a consumption sheet to enable auto costing."
