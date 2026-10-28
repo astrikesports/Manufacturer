@@ -9,6 +9,10 @@ import PageHeader from '../components/PageHeader';
 import Modal from '../components/Modal';
 import ConfirmDialog from '../components/ConfirmDialog';
 import EmptyState from '../components/EmptyState';
+import { Download, Upload } from 'lucide-react';
+import { downloadCsv, readCsvFile } from '../utils/spreadsheet';
+
+const todayDate = () => new Date().toISOString().slice(0, 10);
 
 interface AddStockTarget {
   fabric: Fabric;
@@ -94,6 +98,30 @@ export default function FabricStock() {
     setDeleteId(null);
   };
 
+  const downloadFabricData = () => downloadCsv(`Fabric-Stock-${todayDate()}.csv`, ['Fabric Name','Unit','Color','Rolls','Stock','Used'], data.fabrics.flatMap(f => f.colors.map(c => [f.name,f.unit,c.name,c.rolls,c.stock,c.used])));
+  const uploadFabricData = async (file?: File) => {
+    if (!file) return;
+    try {
+      const rows = await readCsvFile(file);
+      if (!rows.length) { alert('CSV empty hai. Columns: Fabric Name, Unit, Color, Rolls, Stock, Used'); return; }
+      const grouped = new Map<string, { name: string; unit: Unit; colors: FabricColor[] }>();
+      for (const r of rows) {
+        const name = r['fabric name']?.trim(), color = r['color']?.trim(); if (!name || !color) continue;
+        const rawUnit = r['unit'] || 'KG';
+        const unit = (['KG','Meter','PCS','Pair','Roll','Packet','GSM','Litre','Box'].find(u => u.toLowerCase() === rawUnit.toLowerCase()) || 'KG') as Unit;
+        const key = name.toLowerCase(); if (!grouped.has(key)) grouped.set(key, { name, unit, colors: [] });
+        const g = grouped.get(key)!; if (g.colors.some(c => c.name.toLowerCase() === color.toLowerCase())) continue;
+        g.colors.push({ id: '', name: color, rolls: Math.max(0, Number(r['rolls']) || 0), stock: Math.max(0, Number(r['stock']) || 0), used: Math.max(0, Number(r['used']) || 0) });
+      }
+      let added = 0, skipped = 0;
+      for (const g of grouped.values()) {
+        const existing = data.fabrics.find(f => f.name.toLowerCase() === g.name.toLowerCase());
+        if (!existing) { await saveFabric({ id: '', name: g.name, unit: g.unit, colors: g.colors, createdAt: now() }); added += g.colors.length; }
+        else { const fresh = g.colors.filter(c => !existing.colors.some(ec => ec.name.toLowerCase() === c.name.toLowerCase())); if (fresh.length) { await saveFabric({ ...existing, colors: [...existing.colors, ...fresh] }); added += fresh.length; } skipped += g.colors.length - fresh.length; }
+      }
+      addHistory('Fabric Stock', 'Import', `Imported ${added} fabric color rows; skipped ${skipped} existing rows`); alert(`Upload complete. Added: ${added}, skipped existing: ${skipped}.`);
+    } catch (e) { alert(`Upload failed: ${e instanceof Error ? e.message : 'Invalid CSV file'}`); }
+  };
   const addColorRow = () => setForm((f) => ({ ...f, colors: [...f.colors, { id: '', name: '', rolls: 0, stock: 0, used: 0 }] }));
   const removeColorRow = (i: number) => setForm((f) => ({ ...f, colors: f.colors.filter((_, idx) => idx !== i) }));
 
@@ -105,6 +133,10 @@ export default function FabricStock() {
         icon={<Package size={22} />}
         action={{ label: 'Add Fabric', onClick: openCreate }}
       />
+      <div className="flex flex-wrap justify-end gap-2 mb-3">
+        <button type="button" className="btn-secondary" onClick={downloadFabricData}><Download size={16} /> Download Excel/CSV</button>
+        <label className="btn-secondary cursor-pointer"><Upload size={16} /> Upload Excel/CSV<input className="hidden" type="file" accept=".csv,text/csv" onChange={(e) => { void uploadFabricData(e.target.files?.[0]); e.currentTarget.value = ''; }} /></label>
+      </div>
 
       {data.fabrics.length === 0 ? (
         <EmptyState

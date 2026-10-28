@@ -9,6 +9,8 @@ import PageHeader from '../components/PageHeader';
 import Modal from '../components/Modal';
 import ConfirmDialog from '../components/ConfirmDialog';
 import EmptyState from '../components/EmptyState';
+import { Upload } from 'lucide-react';
+import { readCsvFile } from '../utils/spreadsheet';
 
 const clone = <T,>(o: T): T => JSON.parse(JSON.stringify(o));
 
@@ -111,6 +113,22 @@ export default function ArticleMaster() {
 
   const fabricName = (id: string) => data.fabrics.find((f) => f.id === id)?.name ?? '—';
 
+  const uploadArticles = async (file?: File) => {
+    if (!file) return;
+    try {
+      const rows = await readCsvFile(file); if (!rows.length) { alert('CSV empty hai. Required columns: Article Code, Article Name, Fabric'); return; }
+      let added = 0, skipped = 0, invalid = 0;
+      for (const r of rows) {
+        const code = (r['article code'] || r['code'] || '').trim(), name = (r['article name'] || r['name'] || '').trim(), fabricName = (r['fabric'] || r['fabric name'] || '').trim();
+        if (!code || !name || !fabricName) { invalid++; continue; }
+        if (data.articles.some(a => a.code.toLowerCase() === code.toLowerCase() && (a.isCurrent ?? true))) { skipped++; continue; }
+        const fabric = data.fabrics.find(f => f.name.toLowerCase() === fabricName.toLowerCase()); if (!fabric) { invalid++; continue; }
+        const article: Article = { id: '', code, name, fabricId: fabric.id, consumption: [], consumptionSheet: [], versionNumber: 1, isCurrent: true, createdAt: now() };
+        await saveArticle(article); added++;
+      }
+      addHistory('Article Master', 'Import', `Imported ${added} articles; skipped ${skipped} duplicates; invalid ${invalid}`); alert(`Upload complete. Added: ${added}, duplicates skipped: ${skipped}, invalid/missing fabric: ${invalid}. Configure article consumption after import.`);
+    } catch (e) { alert(`Upload failed: ${e instanceof Error ? e.message : 'Invalid CSV file'}`); }
+  };
   const downloadExcel = () => {
     const escapeHtml = (value: unknown) => String(value ?? '')
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -170,10 +188,9 @@ export default function ArticleMaster() {
     <div>
       <PageHeader title="Article Master" subtitle="Define articles with size-wise fabric consumption and full consumption sheet" icon={<Shirt size={22} />}
         action={{ label: 'Add Article', onClick: openCreate }} />
-      <div className="flex justify-end mb-3">
-        <button type="button" className="btn-secondary" onClick={downloadExcel} disabled={data.articles.length === 0}>
-          <Download size={16} /> Download Excel
-        </button>
+      <div className="flex flex-wrap justify-end gap-2 mb-3">
+        <button type="button" className="btn-secondary" onClick={downloadExcel} disabled={data.articles.length === 0}><Download size={16} /> Download Excel</button>
+        <label className="btn-secondary cursor-pointer"><Upload size={16} /> Upload CSV<input className="hidden" type="file" accept=".csv,text/csv" onChange={(e) => { void uploadArticles(e.target.files?.[0]); e.currentTarget.value = ''; }} /></label>
       </div>
 
       {data.articles.length === 0 ? (

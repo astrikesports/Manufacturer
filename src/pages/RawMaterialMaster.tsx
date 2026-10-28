@@ -8,6 +8,8 @@ import PageHeader from '../components/PageHeader';
 import Modal from '../components/Modal';
 import ConfirmDialog from '../components/ConfirmDialog';
 import EmptyState from '../components/EmptyState';
+import { Download, Upload } from 'lucide-react';
+import { downloadCsv, readCsvFile } from '../utils/spreadsheet';
 
 const ALL_UNITS: Unit[] = ['KG', 'Meter', 'PCS', 'Roll', 'Pair', 'Packet', 'Box'];
 
@@ -50,6 +52,26 @@ export default function RawMaterialMaster() {
     type: 'Purchase', qty: '', notes: '', date: today(),
   });
 
+  const downloadMaterials = () => downloadCsv(`Raw-Material-Master-${today()}.csv`, ['Name','Category','Unit','Purchase Price','Supplier','GST','Status','Remarks','Opening Stock','Min Stock','Current Stock'], data.rawMaterials.map(m => [m.name,m.category,m.unit,m.purchasePrice,m.supplier,m.gst,m.status,m.remarks,m.openingStock,m.minStock,m.currentStock]));
+  const uploadMaterials = async (file?: File) => {
+    if (!file) return;
+    try {
+      const rows = await readCsvFile(file); if (!rows.length) { alert('CSV empty hai. Columns: Name, Category, Unit, Purchase Price, Supplier, GST, Status, Remarks, Opening Stock, Min Stock'); return; }
+      let added = 0, skipped = 0;
+      for (const r of rows) {
+        const name = r['name']?.trim(); if (!name) continue;
+        if (data.rawMaterials.some(m => m.name.toLowerCase() === name.toLowerCase())) { skipped++; continue; }
+        const category = ALL_CATEGORIES.find(c => c.toLowerCase() === (r['category'] || 'other').toLowerCase()) ?? 'Other';
+        const rawUnit = r['unit'] || 'PCS'; const unit = (ALL_UNITS.find(u => u.toLowerCase() === rawUnit.toLowerCase()) ?? 'PCS') as Unit;
+        const openingStock = Math.max(0, Number(r['opening stock']) || 0);
+        const item: RawMaterial = { id: '', name, category, unit, purchasePrice: Math.max(0, Number(r['purchase price']) || 0), supplier: r['supplier'] || '', gst: Math.max(0, Number(r['gst']) || 0), status: (r['status'] || 'Active').toLowerCase() === 'inactive' ? 'Inactive' : 'Active', remarks: r['remarks'] || '', openingStock, currentStock: openingStock, minStock: Math.max(0, Number(r['min stock']) || 0), createdAt: now() };
+        const saved = await saveRawMaterial(item);
+        if (openingStock > 0) await saveRawMaterialTransaction({ id: uid('tx_'), materialId: saved.id, type: 'Opening', qty: openingStock, notes: 'Opening stock imported from CSV', date: today(), createdAt: now() });
+        added++;
+      }
+      addHistory('Raw Material', 'Import', `Imported ${added} raw materials; skipped ${skipped} duplicates`); alert(`Upload complete. Added: ${added}, skipped duplicates: ${skipped}.`);
+    } catch (e) { alert(`Upload failed: ${e instanceof Error ? e.message : 'Invalid CSV file'}`); }
+  };
   const openCreate = () => {
     setEditId(null);
     setForm({ name: '', category: 'Fabric', unit: 'KG', purchasePrice: 0, supplier: '', gst: 0, status: 'Active', remarks: '', openingStock: 0, minStock: 0 });
@@ -194,6 +216,10 @@ export default function RawMaterialMaster() {
     <div>
       <PageHeader title="Raw Material Master" subtitle="Manage all raw materials with transaction-based inventory tracking" icon={<Package size={22} />}
         action={{ label: 'Add Material', onClick: openCreate }} />
+      <div className="flex flex-wrap justify-end gap-2 mb-3">
+        <button type="button" className="btn-secondary" onClick={downloadMaterials}><Download size={16} /> Download Excel/CSV</button>
+        <label className="btn-secondary cursor-pointer"><Upload size={16} /> Upload Excel/CSV<input className="hidden" type="file" accept=".csv,text/csv" onChange={(e) => { void uploadMaterials(e.target.files?.[0]); e.currentTarget.value = ''; }} /></label>
+      </div>
 
       {data.rawMaterials.length === 0 ? (
         <EmptyState icon={<Package size={40} />} title="No raw materials" message="Add fabric, thread, elastic, zip, buttons, labels, rib, poly bags, cartons and more."
