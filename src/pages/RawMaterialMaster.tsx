@@ -122,9 +122,38 @@ export default function RawMaterialMaster() {
     setDeleteTxId(null);
   };
 
-  const selectedArticle = data.articles.find((a) => a.id === filterArticleId);
-  const articleMaterialIds = selectedArticle
-    ? new Set(selectedArticle.consumptionSheet.map((row) => row.materialId).filter(Boolean))
+  // Legacy imports sometimes contain one row per lot/version (e.g. QR-25,
+  // QR-25 LOT-158, QR-25 NEW LOTT). Treat those as one Article in this filter.
+  const canonicalArticleCode = (code: string) => code
+    .toUpperCase()
+    .replace(/\s+NEW\s+LOTT?\b.*$/i, '')
+    .replace(/\s+LOT[-\s]*\d+\b.*$/i, '')
+    .replace(/\s+/g, '')
+    .replace(/-/g, '')
+    .trim();
+  // Group legacy article/lot records by normalized article code, not baseArticleId.
+  // Older data may have QR-25, QR-25 LOT-158 and QR-25 NEW LOTT as separate
+  // rows with different material recipes. The filter should show one QR-25 option
+  // and the union of materials linked to all records in that article family.
+  const articleGroupKey = (article: (typeof data.articles)[number]) => {
+    const normalizedCode = canonicalArticleCode(article.code);
+    return normalizedCode || article.baseArticleId || article.id;
+  };
+  const currentArticles = data.articles.filter((a) => a.isCurrent !== false);
+  const articleOptions = Array.from(new Map(
+    currentArticles
+      .sort((a, b) => a.code.length - b.code.length || a.code.localeCompare(b.code))
+      .map((article) => [articleGroupKey(article), article]),
+  ).entries())
+    .map(([groupKey, article]) => ({ ...article, filterGroupKey: groupKey }))
+    .sort((a, b) => a.code.localeCompare(b.code));
+  const selectedArticle = articleOptions.find((a) => a.filterGroupKey === filterArticleId);
+  const selectedGroupKey = selectedArticle?.filterGroupKey ?? null;
+  const articleMaterialIds = selectedGroupKey
+    ? new Set(data.articles
+        .filter((article) => articleGroupKey(article) === selectedGroupKey)
+        .flatMap((article) => article.consumptionSheet.map((row) => row.materialId))
+        .filter(Boolean))
     : null;
   const filtered = data.rawMaterials.filter((m) => {
     const matchSearch = m.name.toLowerCase().includes(search.toLowerCase()) || m.supplier.toLowerCase().includes(search.toLowerCase());
@@ -178,8 +207,8 @@ export default function RawMaterialMaster() {
             </div>
             <select className="input sm:w-56" value={filterArticleId} onChange={(e) => setFilterArticleId(e.target.value)}>
               <option value="All">All Articles · All Materials</option>
-              {data.articles.filter((a) => a.isCurrent !== false).sort((a, b) => a.code.localeCompare(b.code)).map((a) => (
-                <option key={a.id} value={a.id}>{a.code} — {a.name}{a.versionNumber ? ` (V${a.versionNumber})` : ''}</option>
+              {articleOptions.map((a) => (
+                <option key={a.filterGroupKey} value={a.filterGroupKey}>{a.code} — {a.name}{a.versionNumber ? ` (V${a.versionNumber})` : ''}</option>
               ))}
             </select>
             <select className="input sm:w-48" value={filterCat} onChange={(e) => setFilterCat(e.target.value as MaterialCategory | 'All')}>
