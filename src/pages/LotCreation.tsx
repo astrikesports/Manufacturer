@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Layers, Plus, Edit2, Trash2, History, ChevronRight, ChevronDown, IndianRupee, TrendingUp, Wand2 } from 'lucide-react';
+import { Layers, Plus, Edit2, Trash2, History, ChevronRight, ChevronDown, IndianRupee, TrendingUp, Wand2, Download } from 'lucide-react';
 import { useStore } from '../store/StoreContext';
 import { getLotCostSummary } from '../store/costing';
 import { now, formatDate, formatNum, clone } from '../utils/helpers';
@@ -240,6 +240,52 @@ export default function LotCreation() {
   const colorName = (fabricId: string, colorId: string) =>
     data.fabrics.find((f) => f.id === fabricId)?.colors.find((c) => c.id === colorId)?.name ?? '—';
 
+  const downloadLotsExcel = () => {
+    if (data.lots.length === 0) return;
+    const escapeHtml = (value: unknown) => String(value ?? '')
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/\"/g, '&quot;').replace(/'/g, '&#39;');
+    const headers = [
+      'Lot Number', 'Created Date', 'Status', 'Article Code', 'Article Name', 'Article Version',
+      'Fabric', 'Colors', 'Roll Allocation', 'Total Allocated Fabric', 'Sizes', 'Planned PCS',
+      'Actual Cut PCS', 'Packed PCS', 'Dispatched PCS', 'Selling Price Per PCS (INR)',
+      'Cost Per Piece (INR)', 'Net Cost Per Piece incl. GST (INR)', 'Total Lot Cost (INR)',
+      'GST Amount (INR)', 'Net Lot Cost incl. GST (INR)', 'Revenue (INR)', 'Gross Profit (INR)', 'Net Profit (INR)',
+    ];
+    const rows = [...data.lots]
+      .sort((a, b) => a.lotNo.localeCompare(b.lotNo))
+      .map((lot) => {
+        const article = data.articles.find((a) => a.id === lot.articleId);
+        const fabric = data.fabrics.find((f) => f.id === lot.fabricId);
+        const summary = getLotCostSummary(data, lot.id);
+        const rollAllocation = lot.colorPlans.map((cp) =>
+          `${colorName(lot.fabricId, cp.colorId)}: ${cp.rollsSelected ?? 0} roll(s), ${Number(cp.plannedFabric || 0).toFixed(2)} m/kg`
+        ).join(' | ');
+        return [
+          lot.lotNo, lot.createdAt ? new Date(lot.createdAt).toLocaleDateString('en-IN') : '', lot.status,
+          article?.code ?? '', article?.name ?? '', `V${article?.versionNumber ?? 1}`,
+          fabric?.name ?? '', lot.colorIds.map((id) => colorName(lot.fabricId, id)).join(', '), rollAllocation,
+          lot.colorPlans.reduce((sum, cp) => sum + (Number(cp.plannedFabric) || 0), 0),
+          lot.sizes.join(', '), lot.plannedProduction, summary?.actualCutPcs ?? 0,
+          summary?.actualPackedPcs ?? 0, summary?.actualDispatchedPcs ?? 0,
+          lot.sellingPricePerPcs, summary?.costPerPiece ?? 0, summary?.netCostPerPiece ?? 0,
+          summary?.totalLotCost ?? 0, summary?.totalGstAmount ?? 0, summary?.netLotCost ?? 0,
+          summary?.totalRevenue ?? 0, summary?.grossProfit ?? 0, summary?.netProfit ?? 0,
+        ];
+      });
+    const table = `<table><thead><tr>${headers.map((h) => `<th>${escapeHtml(h)}</th>`).join('')}</tr></thead><tbody>${rows.map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+    const workbook = `<!doctype html><html><head><meta charset="utf-8"></head><body><h2>StitchFlow - Lot Creation Export</h2><p>Exported: ${escapeHtml(new Date().toLocaleString('en-IN'))}</p>${table}</body></html>`;
+    const blob = new Blob([`\ufeff${workbook}`], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `StitchFlow-Lot-Creation-${new Date().toISOString().slice(0, 10)}.xls`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+
   // Live costing preview
   const previewCost = selectedArticle && plannedProduction > 0
     ? getLotCostSummary(
@@ -257,6 +303,12 @@ export default function LotCreation() {
     <div>
       <PageHeader title="Lot Creation" subtitle="Create production lots with roll-based fabric allocation and auto-calculated planned PCS" icon={<Layers size={22} />}
         action={{ label: 'Create Lot', onClick: openCreate }} />
+
+      <div className="flex justify-end mb-4">
+        <button type="button" className="btn-secondary" onClick={downloadLotsExcel} disabled={data.lots.length === 0} title={data.lots.length === 0 ? 'Create a lot before exporting' : 'Download all lot details as Excel'}>
+          <Download size={16} /> Download Excel
+        </button>
+      </div>
 
       {data.lots.length === 0 ? (
         <EmptyState icon={<Layers size={40} />} title="No lots yet" message="Create a lot by selecting an article, colors (by roll), active sizes and selling price."
