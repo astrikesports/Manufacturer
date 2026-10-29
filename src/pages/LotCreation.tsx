@@ -61,10 +61,14 @@ export default function LotCreation() {
     return !!material && !!selectedFabric && material.name.trim().toLowerCase() === selectedFabric.name.trim().toLowerCase();
   });
 
-  // Avg fabric consumption per piece from size-wise consumption table
-  const avgFabricConsumption = selectedArticle && selectedArticle.consumption.length > 0
-    ? selectedArticle.consumption.reduce((a, c) => a + c.consumption, 0) / selectedArticle.consumption.length
-    : 0;
+  // Consumption per piece drives the auto PCS calculation. Prefer the selected
+  // article's fabric row (Article Master consumption sheet); fall back to the
+  // legacy size-wise consumption values for older articles.
+  const avgFabricConsumption = fabricConsumptionRow && Number(fabricConsumptionRow.consumption) > 0
+    ? Number(fabricConsumptionRow.consumption)
+    : selectedArticle && selectedArticle.consumption.length > 0
+      ? selectedArticle.consumption.reduce((a, c) => a + Number(c.consumption || 0), 0) / selectedArticle.consumption.length
+      : 0;
 
   // For each color plan, plannedFabric = rollsSelected × avgKgPerRoll
   const getColorAvgPerRoll = (colorId: string): number => {
