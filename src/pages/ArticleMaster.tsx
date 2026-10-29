@@ -4,7 +4,8 @@ import { useStore } from '../store/StoreContext';
 import { getArticleCostSummary } from '../store/costing';
 import { uid, now, formatDate, formatNum } from '../utils/helpers';
 import { ALL_SIZES } from '../types';
-import type { Article, SizeConsumption, Size, ConsumptionRow } from '../types';
+import type { Article, SizeConsumption, Size, ConsumptionRow, RawMaterial, MaterialCategory, Unit } from '../types';
+import { ALL_CATEGORIES } from '../types';
 import PageHeader from '../components/PageHeader';
 import Modal from '../components/Modal';
 import ConfirmDialog from '../components/ConfirmDialog';
@@ -15,12 +16,14 @@ import { readCsvFile } from '../utils/spreadsheet';
 const clone = <T,>(o: T): T => JSON.parse(JSON.stringify(o));
 
 export default function ArticleMaster() {
-  const { data, saveArticle, deleteArticle: deleteArticleDb, addHistory } = useStore();
+  const { data, saveArticle, saveRawMaterial, deleteArticle: deleteArticleDb, addHistory } = useStore();
   const [modalOpen, setModalOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [historyArticle, setHistoryArticle] = useState<Article | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [customItemOpen, setCustomItemOpen] = useState(false);
+  const [customItem, setCustomItem] = useState<{ name: string; category: MaterialCategory; unit: Unit; rate: number }>({ name: '', category: 'Other', unit: 'PCS', rate: 0 });
 
   const [form, setForm] = useState<{ code: string; name: string; fabricId: string; consumption: SizeConsumption[]; consumptionSheet: ConsumptionRow[] }>({
     code: '', name: '', fabricId: '', consumption: [], consumptionSheet: [],
@@ -55,7 +58,7 @@ export default function ArticleMaster() {
 
     const frozenSheet = form.consumptionSheet.map((r) => {
       const material = data.rawMaterials.find((m) => m.id === r.materialId);
-      return { ...r, unitRate: material?.purchasePrice ?? r.unitRate ?? 0, gstRate: material?.gst ?? r.gstRate ?? 0 };
+      return { ...r, unitRate: Number.isFinite(r.unitRate) ? r.unitRate : (material?.purchasePrice ?? 0), gstRate: r.gstRate ?? material?.gst ?? 0 };
     });
     if (editId) {
       const existing = data.articles.find((a) => a.id === editId)!;
@@ -100,15 +103,37 @@ export default function ArticleMaster() {
     setForm((f) => ({ ...f, consumptionSheet: f.consumptionSheet.filter((r) => r.id !== rowId) }));
   };
 
-  const updateConsumptionRow = (rowId: string, field: 'materialId' | 'consumption', val: string | number) => {
+  const updateConsumptionRow = (rowId: string, field: 'materialId' | 'consumption' | 'unitRate', val: string | number) => {
     setForm((f) => ({
       ...f,
       consumptionSheet: f.consumptionSheet.map((r) => {
         if (r.id !== rowId) return r;
         if (field === 'materialId') { const material = data.rawMaterials.find((m) => m.id === val); return { ...r, materialId: val as string, unitRate: material?.purchasePrice ?? 0, gstRate: material?.gst ?? 0 }; }
+        if (field === 'unitRate') return { ...r, unitRate: Number(val) || 0 };
         return { ...r, consumption: val as number };
       }),
     }));
+  };
+
+  const createCustomItem = async () => {
+    const name = customItem.name.trim();
+    if (!name) { alert('Custom item ka naam bharein.'); return; }
+    const existing = data.rawMaterials.find((m) => m.name.trim().toLowerCase() === name.toLowerCase());
+    let material: RawMaterial;
+    if (existing) {
+      material = existing;
+    } else {
+      const created: RawMaterial = {
+        id: '', name, category: customItem.category, unit: customItem.unit,
+        purchasePrice: Number(customItem.rate) || 0, supplier: '', gst: 0, status: 'Active',
+        remarks: 'Created from Article Master custom item', openingStock: 0, currentStock: 0,
+        minStock: 0, createdAt: now(),
+      };
+      material = await saveRawMaterial(created);
+    }
+    setForm((f) => ({ ...f, consumptionSheet: [...f.consumptionSheet, { id: uid(), materialId: material.id, consumption: 0, unitRate: Number(customItem.rate) || material.purchasePrice || 0, gstRate: material.gst || 0 }] }));
+    setCustomItem({ name: '', category: 'Other', unit: 'PCS', rate: 0 });
+    setCustomItemOpen(false);
   };
 
   const fabricName = (id: string) => data.fabrics.find((f) => f.id === id)?.name ?? '—';
@@ -339,8 +364,20 @@ export default function ArticleMaster() {
           <div>
             <div className="flex items-center justify-between mb-2">
               <label className="label !mb-0">Consumption Sheet</label>
-              <button className="btn-ghost text-xs" onClick={addConsumptionRow} disabled={data.rawMaterials.length === 0}><Plus size={14} /> Add Row</button>
+              <div className="flex gap-2"><button className="btn-secondary text-xs" type="button" onClick={() => setCustomItemOpen((v) => !v)}><Plus size={14} /> Add Custom Item</button><button className="btn-ghost text-xs" onClick={addConsumptionRow} disabled={data.rawMaterials.length === 0}><Plus size={14} /> Add Row</button></div>
             </div>
+            {customItemOpen && (
+              <div className="mb-3 p-4 rounded-lg border border-brand-200 bg-brand-50 space-y-3">
+                <p className="text-sm font-semibold text-brand-800">Custom Item Details</p>
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                  <div><label className="label">Item Name</label><input className="input" value={customItem.name} onChange={(e) => setCustomItem((v) => ({ ...v, name: e.target.value }))} placeholder="e.g. Custom Tag" /></div>
+                  <div><label className="label">Category</label><select className="input" value={customItem.category} onChange={(e) => setCustomItem((v) => ({ ...v, category: e.target.value as MaterialCategory }))}>{ALL_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}</select></div>
+                  <div><label className="label">Unit</label><select className="input" value={customItem.unit} onChange={(e) => setCustomItem((v) => ({ ...v, unit: e.target.value as Unit }))}>{['KG','Meter','PCS','Pair','Roll','Packet','GSM','Litre','Box'].map((u) => <option key={u} value={u}>{u}</option>)}</select></div>
+                  <div><label className="label">Rate (₹)</label><input type="number" min="0" step="0.0001" className="input" value={customItem.rate} onChange={(e) => setCustomItem((v) => ({ ...v, rate: Number(e.target.value) || 0 }))} /></div>
+                </div>
+                <div className="flex justify-end gap-2"><button className="btn-secondary" type="button" onClick={() => setCustomItemOpen(false)}>Cancel</button><button className="btn-primary" type="button" onClick={() => { void createCustomItem(); }}>Add Item to Article</button></div>
+              </div>
+            )}
             {data.rawMaterials.length === 0 ? (
               <p className="text-sm text-warn-600 p-3 rounded-lg bg-warn-50">Add raw materials first to build a consumption sheet.</p>
             ) : (
@@ -350,7 +387,7 @@ export default function ArticleMaster() {
                     <tr>
                       <th className="th">Material</th>
                       <th className="th text-right">Consumption</th>
-                      <th className="th text-right">Rate (auto)</th>
+                      <th className="th text-right">Rate (editable ₹)</th>
                       <th className="th text-right">Cost (₹)</th>
                       <th className="th"></th>
                     </tr>
@@ -372,7 +409,7 @@ export default function ArticleMaster() {
                           <td className="td p-1">
                             <input type="number" step="0.001" className="input text-right" value={row.consumption || ''} onChange={(e) => updateConsumptionRow(row.id, 'consumption', +e.target.value)} />
                           </td>
-                          <td className="td text-right text-slate-500">₹{formatNum(mat?.purchasePrice ?? 0, (mat?.purchasePrice ?? 0) < 1 ? 4 : 2)}</td>
+                          <td className="td p-1"><input type="number" min="0" step="0.0001" className="input text-right w-28" value={row.unitRate ?? mat?.purchasePrice ?? 0} onChange={(e) => updateConsumptionRow(row.id, 'unitRate', +e.target.value)} aria-label="Custom rate" /></td>
                           <td className="td text-right font-medium text-brand-700">₹{formatNum(cost, 2)}</td>
                           <td className="td p-1">
                             <button className="btn-ghost text-err-600" onClick={() => removeConsumptionRow(row.id)}><Trash2 size={16} /></button>
