@@ -93,9 +93,15 @@ export default function FabricStock() {
   const confirmDelete = async () => {
     if (!deleteId) return;
     const fabric = data.fabrics.find((f) => f.id === deleteId);
-    await deleteFabricDb(deleteId);
-    addHistory('Fabric Stock', 'Delete', `Deleted fabric: ${fabric?.name}`);
-    setDeleteId(null);
+    try {
+      await deleteFabricDb(deleteId);
+      addHistory('Fabric Stock', 'Delete', `Deleted fabric: ${fabric?.name}`);
+      setDeleteId(null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Fabric delete failed. Please try again.';
+      alert(message);
+      // Keep the dialog open so the user understands the delete did not happen.
+    }
   };
 
   const downloadFabricData = () => downloadCsv(`Fabric-Stock-${todayDate()}.csv`, ['Fabric Name','Unit','Color','Rolls','Stock','Used'], data.fabrics.flatMap(f => f.colors.map(c => [f.name,f.unit,c.name,c.rolls,c.stock,c.used])));
@@ -383,7 +389,7 @@ export default function FabricStock() {
       <ConfirmDialog
         open={!!deleteId}
         title="Delete Fabric?"
-        message="This will permanently delete the fabric, its colors, and cascade-delete all related lots, cuttings, packings and dispatches. Fabric stock will be restored."
+        message="Only unused fabrics can be deleted. Fabrics linked to articles or production lots will be protected to preserve production history."
         onConfirm={confirmDelete}
         onCancel={() => setDeleteId(null)}
       />

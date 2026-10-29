@@ -303,7 +303,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
 
   const deleteFabric = useCallback(async (fabricId: string) => {
-    await supabase.from('fabrics').delete().eq('id', fabricId);
+    // Never cascade-delete production history just to remove a fabric master.
+    // Check references first and show a useful error instead of silently desyncing UI.
+    const [{ data: articleRefs, error: articleCheckError }, { data: lotRefs, error: lotCheckError }] = await Promise.all([
+      supabase.from('articles').select('id').eq('fabric_id', fabricId).limit(1),
+      supabase.from('lots').select('id').eq('fabric_id', fabricId).limit(1),
+    ]);
+    if (articleCheckError) throw articleCheckError;
+    if (lotCheckError) throw lotCheckError;
+    if ((articleRefs?.length ?? 0) > 0 || (lotRefs?.length ?? 0) > 0) {
+      throw new Error('This fabric cannot be deleted because it is used by an Article Master or Production Lot. Keep it for historical records; edit its name/details or stop using it for new lots instead.');
+    }
+
+    const { error } = await supabase.from('fabrics').delete().eq('id', fabricId);
+    if (error) {
+      if (error.code === '23503' || error.code === '409') {
+        throw new Error('This fabric is still referenced by other records, so it cannot be deleted. Existing production history has been protected.');
+      }
+      throw error;
+    }
     setDataState((prev) => {
       const next = { ...prev, fabrics: prev.fabrics.filter((f) => f.id !== fabricId) };
       dataRef.current = next;
