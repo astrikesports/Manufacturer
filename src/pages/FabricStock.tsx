@@ -104,22 +104,56 @@ export default function FabricStock() {
     try {
       const rows = await readCsvFile(file);
       if (!rows.length) { alert('CSV empty hai. Columns: Fabric Name, Unit, Color, Rolls, Stock, Used'); return; }
-      const grouped = new Map<string, { name: string; unit: Unit; colors: FabricColor[] }>();
+
+      // Repeated fabric/color rows represent additional stock, not duplicates to discard.
+      // Combine repeated rows in the uploaded file, then add their quantities to existing stock.
+      const grouped = new Map<string, { name: string; unit: Unit; colors: Map<string, FabricColor> }>();
       for (const r of rows) {
-        const name = r['fabric name']?.trim(), color = r['color']?.trim(); if (!name || !color) continue;
+        const name = r['fabric name']?.trim();
+        const color = r['color']?.trim();
+        if (!name || !color) continue;
         const rawUnit = r['unit'] || 'KG';
         const unit = (['KG','Meter','PCS','Pair','Roll','Packet','GSM','Litre','Box'].find(u => u.toLowerCase() === rawUnit.toLowerCase()) || 'KG') as Unit;
-        const key = name.toLowerCase(); if (!grouped.has(key)) grouped.set(key, { name, unit, colors: [] });
-        const g = grouped.get(key)!; if (g.colors.some(c => c.name.toLowerCase() === color.toLowerCase())) continue;
-        g.colors.push({ id: '', name: color, rolls: Math.max(0, Number(r['rolls']) || 0), stock: Math.max(0, Number(r['stock']) || 0), used: Math.max(0, Number(r['used']) || 0) });
+        const fabricKey = name.toLowerCase();
+        if (!grouped.has(fabricKey)) grouped.set(fabricKey, { name, unit, colors: new Map() });
+        const group = grouped.get(fabricKey)!;
+        const colorKey = color.toLowerCase().replace(/\s+/g, ' ').trim();
+        const rolls = Math.max(0, Number(r['rolls']) || 0);
+        const stock = Math.max(0, Number(r['stock']) || 0);
+        const used = Math.max(0, Number(r['used']) || 0);
+        const previous = group.colors.get(colorKey);
+        if (previous) {
+          previous.rolls += rolls;
+          previous.stock += stock;
+          previous.used += used;
+        } else {
+          group.colors.set(colorKey, { id: '', name: color, rolls, stock, used });
+        }
       }
-      let added = 0, skipped = 0;
+
+      let added = 0, updated = 0;
       for (const g of grouped.values()) {
+        const incomingColors = [...g.colors.values()];
         const existing = data.fabrics.find(f => f.name.toLowerCase() === g.name.toLowerCase());
-        if (!existing) { await saveFabric({ id: '', name: g.name, unit: g.unit, colors: g.colors, createdAt: now() }); added += g.colors.length; }
-        else { const fresh = g.colors.filter(c => !existing.colors.some(ec => ec.name.toLowerCase() === c.name.toLowerCase())); if (fresh.length) { await saveFabric({ ...existing, colors: [...existing.colors, ...fresh] }); added += fresh.length; } skipped += g.colors.length - fresh.length; }
+        if (!existing) {
+          await saveFabric({ id: '', name: g.name, unit: g.unit, colors: incomingColors, createdAt: now() });
+          added += incomingColors.length;
+          continue;
+        }
+
+        const mergedColors: FabricColor[] = existing.colors.map(c => {
+          const incoming = g.colors.get(c.name.toLowerCase().replace(/\s+/g, ' ').trim());
+          if (!incoming) return c;
+          updated++;
+          return { ...c, rolls: c.rolls + incoming.rolls, stock: c.stock + incoming.stock, used: c.used + incoming.used };
+        });
+        const existingColorKeys = new Set(existing.colors.map(c => c.name.toLowerCase().replace(/\s+/g, ' ').trim()));
+        const newColors = incomingColors.filter(c => !existingColorKeys.has(c.name.toLowerCase().replace(/\s+/g, ' ').trim()));
+        await saveFabric({ ...existing, unit: existing.unit || g.unit, colors: [...mergedColors, ...newColors] });
+        added += newColors.length;
       }
-      addHistory('Fabric Stock', 'Import', `Imported ${added} fabric color rows; skipped ${skipped} existing rows`); alert(`Upload complete. Added: ${added}, skipped existing: ${skipped}.`);
+      addHistory('Fabric Stock', 'Import', `Imported stock: ${added} new color rows, ${updated} existing colors topped up`);
+      alert(`Upload complete. New colors added: ${added}. Existing same-color stocks topped up: ${updated}. Rolls, stock and used quantities from repeated rows were added together.`);
     } catch (e) { alert(`Upload failed: ${e instanceof Error ? e.message : 'Invalid CSV file'}`); }
   };
   const addColorRow = () => setForm((f) => ({ ...f, colors: [...f.colors, { id: '', name: '', rolls: 0, stock: 0, used: 0 }] }));
