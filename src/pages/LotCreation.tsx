@@ -384,7 +384,10 @@ export default function LotCreation() {
               <label className="label">Article</label>
               <select className="input" value={form.articleId} onChange={(e) => onArticleChange(e.target.value)}>
                 <option value="">Select article</option>
-                {data.articles.filter((a) => (a.isCurrent ?? true) || a.id === form.articleId).map((a) => <option key={a.id} value={a.id}>{a.code} - {a.name}</option>)}
+                {data.articles
+                  .slice()
+                  .sort((a, b) => a.code.localeCompare(b.code) || (b.versionNumber ?? 1) - (a.versionNumber ?? 1))
+                  .map((a) => <option key={a.id} value={a.id}>{a.code} - {a.name} · V{a.versionNumber ?? 1}{a.isCurrent ? ' (Current)' : ' (Archived)'}</option>)}
               </select>
             </div>
           </div>
@@ -396,6 +399,24 @@ export default function LotCreation() {
               {avgFabricConsumption > 0 && (
                 <span className="ml-auto">Consumption: <strong>{formatNum(avgFabricConsumption, 3)} {selectedFabric?.unit}/pcs</strong></span>
               )}
+            </div>
+          )}
+
+          {selectedArticle && (
+            <div className="rounded-lg border border-slate-200 bg-white p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                <h4 className="text-sm font-semibold text-slate-800">Article Consumption — V{selectedArticle.versionNumber ?? 1}</h4>
+                <span className="text-xs text-slate-500">{selectedArticle.consumptionSheet.length} material items</span>
+              </div>
+              {selectedArticle.consumptionSheet.length > 0 ? (
+                <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr><th className="th">Item</th><th className="th text-right">Consumption / Piece</th><th className="th text-right">Rate</th><th className="th text-right">Cost / Piece</th></tr></thead><tbody>
+                  {selectedArticle.consumptionSheet.map((row) => {
+                    const material = data.rawMaterials.find((m) => m.id === row.materialId);
+                    const rate = row.unitRate ?? material?.purchasePrice ?? 0;
+                    return <tr key={row.id}><td className="td">{material?.name ?? 'Item not found'}</td><td className="td text-right">{formatNum(row.consumption, 3)} {material?.unit ?? ''}</td><td className="td text-right">₹{formatNum(rate, 2)}</td><td className="td text-right">₹{formatNum(row.consumption * rate, 2)}</td></tr>;
+                  })}
+                </tbody></table></div>
+              ) : <p className="text-sm text-amber-700">Is article version mein consumption items saved nahi hain. Article Master mein version kholkar items add/save karein.</p>}
             </div>
           )}
 

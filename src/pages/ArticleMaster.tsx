@@ -303,6 +303,29 @@ export default function ArticleMaster() {
                         </tfoot>
                       </table>
                     </div>
+                    {/* All saved versions for this article */}
+                    <div className="px-5 py-4 border-t border-slate-200 bg-white">
+                      <h4 className="font-semibold text-slate-800 mb-2">All Versions</h4>
+                      <div className="space-y-2">
+                        {data.articles
+                          .filter((v) => (v.baseArticleId || v.id) === (article.baseArticleId || article.id))
+                          .sort((a, b) => (b.versionNumber ?? 1) - (a.versionNumber ?? 1))
+                          .map((v) => {
+                            const versionSummary = getArticleCostSummary(data, v);
+                            return <div key={v.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 py-2">
+                              <div>
+                                <p className="text-sm font-medium text-slate-800">{v.code} — V{v.versionNumber ?? 1} {v.isCurrent ? '(Current)' : '(Archived)'}</p>
+                                <p className="text-xs text-slate-500">{formatDate(v.createdAt)} · {v.consumptionSheet.length} material items · Final cost ₹{formatNum(versionSummary.costPerPiece * 1.05, 2)}</p>
+                              </div>
+                              <div className="flex gap-2">
+                                <button className="btn-secondary text-xs" onClick={() => setHistoryArticle(v)}><History size={14} /> History</button>
+                                <button className="btn-secondary text-xs" onClick={() => openEdit(v)}><Plus size={14} /> Create next version</button>
+                              </div>
+                            </div>;
+                          })}
+                      </div>
+                    </div>
+
                     {/* Category cost strip */}
                     <div className="px-5 py-3 bg-slate-50 border-t border-slate-200 flex flex-wrap gap-x-4 gap-y-1 text-sm">
                       {summary.byCategory.filter((c) => c.total > 0).map((c) => (
