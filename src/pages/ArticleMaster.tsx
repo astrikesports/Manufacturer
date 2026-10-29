@@ -162,7 +162,7 @@ export default function ArticleMaster() {
       'Article Code', 'Article Name', 'Version', 'Version Status', 'Fabric', 'Size',
       'Fabric Consumption', 'Material', 'Material Category', 'Material Consumption',
       'Unit', 'Unit Rate (INR)', 'GST (%)', 'Material Cost Per Piece (INR)',
-      'Total Material Cost Per Piece (INR)', 'Total Cost Per Piece (INR)', 'Created At',
+      'Total Material Cost Per Piece (INR)', 'Total Cost Per Piece (INR)', 'GST @ 5% (INR)', 'Final Cost Per Piece (INR)', 'Created At',
     ];
     const rows: unknown[][] = [];
     const articles = [...data.articles].sort((a, b) =>
@@ -184,7 +184,7 @@ export default function ArticleMaster() {
             material?.category ?? '', row?.consumption ?? '', material?.unit ?? '',
             rate, row?.gstRate ?? material?.gst ?? 0,
             row ? row.consumption * rate : 0, summary.totalMaterialCost,
-            summary.costPerPiece, article.createdAt,
+            summary.costPerPiece, summary.costPerPiece * 0.05, summary.costPerPiece * 1.05, article.createdAt,
           ]);
         }
       }
@@ -243,8 +243,8 @@ export default function ArticleMaster() {
                   <div className="flex items-center gap-4">
                     <div className="flex gap-4 text-sm">
                       <div className="text-right">
-                        <p className="text-xs text-slate-500">Cost Per Piece</p>
-                        <p className="font-bold text-brand-700">₹{formatNum(summary.costPerPiece, 2)}</p>
+                        <p className="text-xs text-slate-500">Final Cost Per Piece (incl. 5% GST)</p>
+                        <p className="font-bold text-brand-700">₹{formatNum(summary.costPerPiece * 1.05, 2)}</p>
                       </div>
                       <div className="text-right">
                         <p className="text-xs text-slate-500">Materials</p>
@@ -291,6 +291,18 @@ export default function ArticleMaster() {
                           <tr>
                             <td className="td" colSpan={4}>Total Material Cost Per Piece</td>
                             <td className="td text-right text-brand-700">₹{formatNum(summary.totalMaterialCost, 2)}</td>
+                          </tr>
+                          <tr>
+                            <td className="td" colSpan={4}>Total Cost Per Piece</td>
+                            <td className="td text-right">₹{formatNum(summary.costPerPiece, 2)}</td>
+                          </tr>
+                          <tr>
+                            <td className="td" colSpan={4}>GST @ 5%</td>
+                            <td className="td text-right">₹{formatNum(summary.costPerPiece * 0.05, 2)}</td>
+                          </tr>
+                          <tr className="bg-brand-50">
+                            <td className="td font-bold" colSpan={4}>Final Cost Per Piece (Including 5% GST)</td>
+                            <td className="td text-right font-bold text-brand-700">₹{formatNum(summary.costPerPiece * 1.05, 2)}</td>
                           </tr>
                         </tfoot>
                       </table>
@@ -442,9 +454,10 @@ export default function ArticleMaster() {
                     </div>
                   ))}
                 </div>
-                <div className="border-t border-brand-200 pt-2 flex items-center justify-between">
-                  <p className="text-sm font-semibold text-brand-700">Total Cost Per Piece</p>
-                  <p className="text-xl font-bold text-brand-700">₹{formatNum(liveCostSummary.costPerPiece, 2)}</p>
+                <div className="border-t border-brand-200 pt-3 space-y-2 text-sm">
+                  <div className="flex items-center justify-between"><p className="font-semibold text-slate-700">Total Cost Per Piece</p><p className="font-bold text-slate-800">₹{formatNum(liveCostSummary.costPerPiece, 2)}</p></div>
+                  <div className="flex items-center justify-between"><p className="font-semibold text-slate-600">GST @ 5%</p><p className="font-semibold text-slate-700">₹{formatNum(liveCostSummary.costPerPiece * 0.05, 2)}</p></div>
+                  <div className="flex items-center justify-between rounded-md bg-white border border-brand-200 p-3"><p className="font-bold text-brand-700">Final Cost Per Piece (Including 5% GST)</p><p className="text-xl font-bold text-brand-700">₹{formatNum(liveCostSummary.costPerPiece * 1.05, 2)}</p></div>
                 </div>
               </div>
             )}
