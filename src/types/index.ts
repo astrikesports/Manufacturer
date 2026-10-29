@@ -1,6 +1,6 @@
 export type Unit = 'KG' | 'Meter' | 'PCS' | 'Pair' | 'Roll' | 'Packet' | 'GSM' | 'Litre' | 'Box';
 
-export const ALL_SIZES = ['S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL', '5XL'] as const;
+export const ALL_SIZES = ['S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL', '5XL', '26', '28', '30', '32', '34', '36', '38', '40', '42', '44'] as const;
 export type Size = (typeof ALL_SIZES)[number];
 
 export interface FabricColor {

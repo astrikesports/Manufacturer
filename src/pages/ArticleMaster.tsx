@@ -90,10 +90,6 @@ export default function ArticleMaster() {
     });
   };
 
-  const setSizeConsumption = (size: Size, val: number) => {
-    setForm((f) => ({ ...f, consumption: f.consumption.map((c) => c.size === size ? { ...c, consumption: val } : c) }));
-  };
-
   const addConsumptionRow = () => {
     const firstMat = data.rawMaterials[0];
     setForm((f) => ({ ...f, consumptionSheet: [...f.consumptionSheet, { id: uid(), materialId: firstMat?.id ?? '', consumption: 0, unitRate: firstMat?.purchasePrice ?? 0, gstRate: firstMat?.gst ?? 0 }] }));
@@ -352,7 +348,7 @@ export default function ArticleMaster() {
           </div>
 
           <div>
-            <label className="label">Select Sizes & Fabric Consumption</label>
+            <label className="label">Select Sizes</label>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {ALL_SIZES.map((size) => {
                 const selected = form.consumption.find((c) => c.size === size);
@@ -362,15 +358,11 @@ export default function ArticleMaster() {
                       <input type="checkbox" checked={!!selected} onChange={() => toggleSize(size)} className="rounded" />
                       <span className="text-sm font-medium text-slate-700">{size}</span>
                     </label>
-                    {selected && (
-                      <input type="number" step="0.01" className="input mt-2" placeholder="Fabric consumption" value={selected.consumption || ''}
-                        onChange={(e) => setSizeConsumption(size, +e.target.value)} />
-                    )}
                   </div>
                 );
               })}
             </div>
-            <p className="text-xs text-slate-400 mt-2">Only selected sizes flow through the production pipeline.</p>
+            <p className="text-xs text-slate-400 mt-2">Only selected sizes flow through the production pipeline. Fabric consumption is not entered here.</p>
           </div>
 
           <div>
