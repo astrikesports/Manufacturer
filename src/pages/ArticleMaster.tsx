@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Shirt, Plus, Edit2, Trash2, History, IndianRupee, ChevronDown, ChevronRight, Download } from 'lucide-react';
+import { Shirt, Plus, Trash2, History, IndianRupee, ChevronDown, ChevronRight, Download } from 'lucide-react';
 import { useStore } from '../store/StoreContext';
 import { getArticleCostSummary } from '../store/costing';
 import { uid, now, formatDate, formatNum } from '../utils/helpers';
@@ -314,7 +314,7 @@ export default function ArticleMaster() {
                       <span className="text-xs text-slate-400">Added {formatDate(article.createdAt)}</span>
                       <div className="flex gap-1">
                         <button className="btn-ghost" onClick={() => setHistoryArticle(article)} title="History"><History size={16} /></button>
-                        <button className="btn-ghost" onClick={() => openEdit(article)}><Edit2 size={16} /></button>
+                        <button className="btn-secondary text-xs" onClick={() => openEdit(article)} title="Create a new version for future lots; existing lots keep their saved version"><Plus size={14} /> New Version</button>
                         <button className="btn-ghost text-err-600" onClick={() => setDeleteId(article.id)}><Trash2 size={16} /></button>
                       </div>
                     </div>
@@ -326,9 +326,10 @@ export default function ArticleMaster() {
         </div>
       )}
 
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editId ? 'Edit Article' : 'Add Article'} size="xl"
-        footer={<><button className="btn-secondary" onClick={() => setModalOpen(false)}>Cancel</button><button className="btn-primary" onClick={save}>{editId ? 'Update' : 'Create'}</button></>}>
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editId ? `Create New Version — ${data.articles.find((a) => a.id === editId)?.code ?? ''}` : 'Add Article'} size="xl"
+        footer={<><button className="btn-secondary" onClick={() => setModalOpen(false)}>Cancel</button><button className="btn-primary" onClick={save}>{editId ? 'Save New Version' : 'Create Article'}</button></>}>
         <div className="space-y-5">
+          {editId && <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">A new article version will be created. Existing lots keep using their original article version; select the new version when creating a future lot.</div>}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className="label">Article Code</label>
