@@ -245,7 +245,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       // Delete removed colors
       const removedIds = oldColors.filter((c) => !newColorIds.has(c.id)).map((c) => c.id);
       if (removedIds.length > 0) {
-        await supabase.from('fabric_colors').delete().in('id', removedIds);
+        // Colors may be referenced by lot plans and production entries. Never silently
+        // remove them from the database or local state when history depends on them.
+        const checks = await Promise.all([
+          supabase.from('lot_color_plans').select('id').in('color_id', removedIds).limit(1),
+          supabase.from('cutting_color_sizes').select('id').in('color_id', removedIds).limit(1),
+          supabase.from('stitching_color_sizes').select('id').in('color_id', removedIds).limit(1),
+          supabase.from('finishing_color_sizes').select('id').in('color_id', removedIds).limit(1),
+          supabase.from('pressing_color_sizes').select('id').in('color_id', removedIds).limit(1),
+          supabase.from('packing_box_contents').select('id').in('color_id', removedIds).limit(1),
+        ]);
+        const failed = checks.find((r) => r.error);
+        if (failed?.error) throw failed.error;
+        if (checks.some((r) => (r.data?.length ?? 0) > 0)) {
+          throw new Error('One or more colors are used by existing lots or production records. Keep these colors; you can add new colors, but cannot remove colors with history.');
+        }
+        const { error: colorDeleteError } = await supabase.from('fabric_colors').delete().in('id', removedIds);
+        if (colorDeleteError) throw colorDeleteError;
       }
   
       // Update existing colors in-place (preserves IDs)
@@ -354,7 +370,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []) as (material: RawMaterial) => Promise<RawMaterial>;
 
   const deleteRawMaterial = useCallback(async (materialId: string) => {
-    await supabase.from('raw_materials').delete().eq('id', materialId);
+    const [articleUse, transactionUse] = await Promise.all([
+      supabase.from('article_material_consumption').select('id').eq('material_id', materialId).limit(1),
+      supabase.from('raw_material_transactions').select('id').eq('material_id', materialId).limit(1),
+    ]);
+    if (articleUse.error) throw articleUse.error;
+    if (transactionUse.error) throw transactionUse.error;
+    if ((articleUse.data?.length ?? 0) > 0 || (transactionUse.data?.length ?? 0) > 0) {
+      throw new Error('This raw material is linked to an Article Master consumption sheet or stock transaction. It cannot be deleted safely. Keep it for history and stop using it for new articles instead.');
+    }
+    const { error } = await supabase.from('raw_materials').delete().eq('id', materialId);
+    if (error) throw new Error(error.code === '23503' ? 'This raw material is still linked to other records and cannot be deleted.' : error.message);
     setDataState((prev) => {
       const next = { ...prev, rawMaterials: prev.rawMaterials.filter((m) => m.id !== materialId) };
       dataRef.current = next;
@@ -389,7 +415,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const deleteRawMaterialTransaction = useCallback(async (txId: string) => {
     const tx = dataRef.current.rawMaterialTransactions.find((t) => t.id === txId);
-    await supabase.from('raw_material_transactions').delete().eq('id', txId);
+    const { error: txDeleteError } = await supabase.from('raw_material_transactions').delete().eq('id', txId);
+    if (txDeleteError) throw txDeleteError;
     if (tx) {
       const remaining = dataRef.current.rawMaterialTransactions.filter((t) => t.id !== txId && t.materialId === tx.materialId);
       const currentStock = remaining.reduce((sum, t) => (t.type === 'Issue' ? sum - t.qty : sum + t.qty), 0);
@@ -465,7 +492,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const deleteArticle = useCallback(async (articleId: string) => {
-    await supabase.from('articles').delete().eq('id', articleId);
+    const { data: lotRefs, error: checkError } = await supabase.from('lots').select('id').eq('article_id', articleId).limit(1);
+    if (checkError) throw checkError;
+    if ((lotRefs?.length ?? 0) > 0) {
+      throw new Error('This article version is used by a Production Lot. It cannot be deleted safely; keep the version for history and create a new version for future changes.');
+    }
+    const { error } = await supabase.from('articles').delete().eq('id', articleId);
+    if (error) throw new Error(error.code === '23503' ? 'This article is still referenced by other records and cannot be deleted.' : error.message);
     setDataState((prev) => {
       const next = { ...prev, articles: prev.articles.filter((a) => a.id !== articleId) };
       dataRef.current = next;
@@ -506,7 +539,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const deleteLot = useCallback(async (lotId: string) => {
-    await supabase.from('lots').delete().eq('id', lotId);
+    const { error } = await supabase.from('lots').delete().eq('id', lotId);
+    if (error) throw new Error(error.code === '23503' ? 'This lot still has linked records that prevent deletion. Remove or resolve linked records first; no data was removed.' : error.message);
     setDataState((prev) => {
       const next = { ...prev, lots: prev.lots.filter((l) => l.id !== lotId) };
       dataRef.current = next;
@@ -544,7 +578,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const deleteCuttingEntry = useCallback(async (entryId: string) => {
-    await supabase.from('cutting_entries').delete().eq('id', entryId);
+    const { error } = await supabase.from('cutting_entries').delete().eq('id', entryId);
+    if (error) throw new Error(error.code === '23503' ? 'This cutting entry is linked to downstream production records and cannot be deleted yet.' : error.message);
     setDataState((prev) => {
       const next = { ...prev, cuttings: prev.cuttings.filter((c) => c.id !== entryId) };
       dataRef.current = next;
@@ -842,7 +877,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const deleteDispatchEntry = useCallback(async (entryId: string) => {
-    await supabase.from('dispatch_entries').delete().eq('id', entryId);
+    const { error } = await supabase.from('dispatch_entries').delete().eq('id', entryId);
+    if (error) throw new Error(error.code === '23503' ? 'This dispatch is linked to other records and cannot be deleted yet.' : error.message);
     setDataState((prev) => {
       const next = { ...prev, dispatches: prev.dispatches.filter((d) => d.id !== entryId) };
       dataRef.current = next;
@@ -853,21 +889,39 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // ── Reset / Sample Data ────────────────────────────────────────────────────
 
   const resetData = useCallback(async () => {
-    await Promise.all([
+    // Delete in dependency order and stop immediately on the first DB error.
+    // Parallel deletes previously caused FK conflicts and could make the UI look reset while DB rows remained.
+    const steps = [
+      supabase.from('dispatch_boxes').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
       supabase.from('dispatch_entries').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
+      supabase.from('packing_box_contents').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
+      supabase.from('packing_size_boxes').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
       supabase.from('packing_entries').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
+      supabase.from('pressing_color_sizes').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
       supabase.from('pressing_entries').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
+      supabase.from('finishing_color_sizes').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
       supabase.from('finishing_entries').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
+      supabase.from('stitching_color_sizes').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
       supabase.from('stitching_entries').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
+      supabase.from('cutting_color_sizes').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
       supabase.from('cutting_entries').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
       supabase.from('cut_pcs_entries').delete().neq('id', 'x'),
+      supabase.from('lot_color_plans').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
+      supabase.from('lot_size_plans').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
       supabase.from('raw_material_transactions').delete().neq('id', 'x'),
       supabase.from('lots').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
+      supabase.from('article_size_consumption').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
+      supabase.from('article_material_consumption').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
       supabase.from('articles').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
+      supabase.from('fabric_colors').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
       supabase.from('raw_materials').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
       supabase.from('fabrics').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
       supabase.from('history_events').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
-    ]);
+    ];
+    for (const result of steps) {
+      const { error } = await result;
+      if (error) throw new Error(`Reset stopped safely: ${error.message}`);
+    }
     const empty = clone(defaultData);
     dataRef.current = empty;
     setDataState(empty);

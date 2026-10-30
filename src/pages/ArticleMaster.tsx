@@ -77,9 +77,13 @@ export default function ArticleMaster() {
   const confirmDelete = async () => {
     if (!deleteId) return;
     const article = data.articles.find((a) => a.id === deleteId);
-    await deleteArticleDb(deleteId);
-    addHistory('Article Master', 'Delete', `Deleted article: ${article?.code}`);
-    setDeleteId(null);
+    try {
+      await deleteArticleDb(deleteId);
+      addHistory('Article Master', 'Delete', `Deleted article: ${article?.code}`);
+      setDeleteId(null);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Article could not be deleted. It may be linked to a production lot.');
+    }
   };
 
   const toggleSize = (size: Size) => {

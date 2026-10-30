@@ -114,9 +114,13 @@ export default function RawMaterialMaster() {
   const confirmDelete = async () => {
     if (!deleteId) return;
     const item = data.rawMaterials.find((m) => m.id === deleteId);
-    await deleteRawMaterial(deleteId);
-    addHistory('Raw Material', 'Delete', `Deleted material: ${item?.name}`);
-    setDeleteId(null);
+    try {
+      await deleteRawMaterial(deleteId);
+      addHistory('Raw Material', 'Delete', `Deleted material: ${item?.name}`);
+      setDeleteId(null);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Raw material could not be deleted. Linked records may exist.');
+    }
   };
 
   const openTxModal = (item: RawMaterial) => {
