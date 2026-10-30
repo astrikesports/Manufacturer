@@ -434,7 +434,7 @@ export default function ArticleMaster() {
                           <td className="td p-1">
                             <select className="input" value={row.materialId} onChange={(e) => updateConsumptionRow(row.id, 'materialId', e.target.value)}>
                               <option value="">Select material</option>
-                              {data.rawMaterials.map((m) => <option key={m.id} value={m.id}>{m.name} ({m.unit})</option>)}
+                              {data.rawMaterials.filter((m) => m.status === 'Active' || m.id === row.materialId).map((m) => <option key={m.id} value={m.id}>{m.name} ({m.unit}){m.status === 'Inactive' ? ' — Inactive (existing recipe)' : ''}</option>)}
                             </select>
                             {mat && <p className="text-xs text-slate-400 mt-1 px-1">{mat.category} · ₹{formatNum(mat.purchasePrice, mat.purchasePrice < 1 ? 4 : 2)}/{mat.unit}</p>}
                           </td>
