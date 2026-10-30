@@ -54,7 +54,7 @@ interface StoreContextType {
   saveFabric: (fabric: Fabric) => Promise<void>;
   deleteFabric: (fabricId: string) => Promise<void>;
   saveRawMaterial: (material: RawMaterial) => Promise<RawMaterial>;
-  deleteRawMaterial: (materialId: string) => Promise<'deleted' | 'deactivated'>;
+  deleteRawMaterial: (materialId: string) => Promise<'deleted' | 'linked'>;
   saveRawMaterialTransaction: (tx: RawMaterialTransaction) => Promise<void>;
   deleteRawMaterialTransaction: (txId: string) => Promise<void>;
   saveArticle: (article: Article) => Promise<void>;
@@ -369,30 +369,33 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return savedMaterial;
   }, []) as (material: RawMaterial) => Promise<RawMaterial>;
 
-  const deleteRawMaterial = useCallback(async (materialId: string): Promise<'deleted' | 'deactivated'> => {
-    // Preserve article recipes and stock ledger history. A linked material is archived
-    // (Inactive) instead of attempting a DELETE that PostgreSQL correctly rejects.
-    const [articleUse, transactionUse] = await Promise.all([
-      supabase.from('article_material_consumption').select('id').eq('material_id', materialId).limit(1),
-      supabase.from('raw_material_transactions').select('id').eq('material_id', materialId).limit(1),
-    ]);
-    if (articleUse.error) throw articleUse.error;
-    if (transactionUse.error) throw transactionUse.error;
-    const isLinked = (articleUse.data?.length ?? 0) > 0 || (transactionUse.data?.length ?? 0) > 0;
-    if (isLinked) {
-      const { error } = await supabase.from('raw_materials').update({ status: 'Inactive' }).eq('id', materialId);
-      if (error) throw error;
-      setDataState((prev) => {
-        const next = { ...prev, rawMaterials: prev.rawMaterials.map((m) => m.id === materialId ? { ...m, status: 'Inactive' as const } : m) };
-        dataRef.current = next;
-        return next;
-      });
-      return 'deactivated';
+  const deleteRawMaterial = useCallback(async (materialId: string): Promise<'deleted' | 'linked'> => {
+    // A raw material used by any Article Master recipe must remain available for
+    // historical costing. If it is not used by an article, remove its stock ledger
+    // rows first, then delete the master record.
+    const { data: articleUse, error: articleUseError } = await supabase
+      .from('article_material_consumption').select('id').eq('material_id', materialId).limit(1);
+    if (articleUseError) throw articleUseError;
+    if ((articleUse?.length ?? 0) > 0) return 'linked';
+
+    const { error: txDeleteError } = await supabase
+      .from('raw_material_transactions').delete().eq('material_id', materialId);
+    if (txDeleteError) throw txDeleteError;
+
+    const { error: materialDeleteError } = await supabase
+      .from('raw_materials').delete().eq('id', materialId);
+    if (materialDeleteError) {
+      throw new Error(materialDeleteError.code === '23503' || materialDeleteError.code === '409'
+        ? 'This material is linked to another record and was not deleted. Check its remaining references.'
+        : materialDeleteError.message);
     }
-    const { error } = await supabase.from('raw_materials').delete().eq('id', materialId);
-    if (error) throw new Error(error.code === '23503' || error.code === '409' ? 'This material is linked to another record and was not deleted.' : error.message);
+
     setDataState((prev) => {
-      const next = { ...prev, rawMaterials: prev.rawMaterials.filter((m) => m.id !== materialId) };
+      const next = {
+        ...prev,
+        rawMaterials: prev.rawMaterials.filter((m) => m.id !== materialId),
+        rawMaterialTransactions: prev.rawMaterialTransactions.filter((t) => t.materialId !== materialId),
+      };
       dataRef.current = next;
       return next;
     });

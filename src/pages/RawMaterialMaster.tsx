@@ -116,9 +116,12 @@ export default function RawMaterialMaster() {
     const item = data.rawMaterials.find((m) => m.id === deleteId);
     try {
       const result = await deleteRawMaterial(deleteId);
-      addHistory('Raw Material', result === 'deactivated' ? 'Edit' : 'Delete', result === 'deactivated' ? `Deactivated linked material: ${item?.name} (history preserved)` : `Deleted material: ${item?.name}`);
+      if (result === 'linked') {
+        alert(`${item?.name ?? 'Material'} Article Master ki consumption recipe mein use ho raha hai. Pehle us article se item remove karo; tabhi material aur uski stock history delete hogi.`);
+        return;
+      }
+      addHistory('Raw Material', 'Delete', `Deleted material and its stock transaction history: ${item?.name}`);
       setDeleteId(null);
-      if (result === 'deactivated') alert(`${item?.name ?? 'Material'} is linked to existing article recipes or stock transactions, so it has been marked Inactive. Historical records are preserved; it will not be offered for new article consumption.`);
     } catch (error) {
       alert(error instanceof Error ? error.message : 'Raw material could not be deleted. Linked records may exist.');
     }
@@ -367,7 +370,7 @@ export default function RawMaterialMaster() {
         </div>
       </Modal>
 
-      <ConfirmDialog open={!!deleteId} title="Remove Raw Material?" message="If this material is not used anywhere, it will be deleted. If it is linked to an Article Master recipe or stock transaction, it will be marked Inactive instead so existing costing and stock history remain safe."
+      <ConfirmDialog open={!!deleteId} title="Delete Raw Material?" message="If this material is not used in any Article Master consumption recipe, it and all its stock transaction history will be permanently deleted. If an Article Master recipe uses it, deletion will be blocked until you remove it from that recipe."
         onConfirm={confirmDelete} onCancel={() => setDeleteId(null)} />
 
       {/* ── Stock Transactions Modal ── */}
