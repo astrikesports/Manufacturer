@@ -130,35 +130,37 @@ import {
 
   // ✅ 2️⃣ SAVE
   const saved = pdfData.id
-  ? await updateQuotation(pdfData.id, payload)
-  : await createQuotation(payload);
+    ? await updateQuotation(pdfData.id, payload)
+    : await createQuotation(payload);
 
-  // ✅ 3️⃣ SYNC STATE
-  // Keep the packing selections/remarks in the current quotation state.
-  // They are used by the PDF and are intentionally not part of the DB payload.
-  setPdfData({
-    ...saved,
+  // Always build the PDF from the complete in-memory quotation as well as
+  // the server response. updateQuotation can return null on a failed PATCH;
+  // spreading only `saved` in that case silently dropped all line items.
+  const quotationForPdf = {
+    ...payload,
+    ...(saved || {}),
+    items: Array.isArray(saved?.items) && saved.items.length > 0
+      ? saved.items
+      : cleanItems,
+    quotationNo: saved?.quotationNo || payload.quotationNo || pdfData.quotationNo || "",
+    party: saved?.party || payload.party,
     gymBagSelected: !!pdfData.gymBagSelected,
     gymBagRemark: pdfData.gymBagRemark || "",
     carryBagSelected: !!pdfData.carryBagSelected,
     carryBagRemark: pdfData.carryBagRemark || "",
     paymentImages: pdfData.paymentImages || []
-  });
+  };
 
-  // ✅ 4️⃣ GENERATE PDF (with packing details + images)
-  await generateQuotationPDF({
-    ...saved,
-    gymBagSelected: !!pdfData.gymBagSelected,
-    gymBagRemark: pdfData.gymBagRemark || "",
-    carryBagSelected: !!pdfData.carryBagSelected,
-    carryBagRemark: pdfData.carryBagRemark || "",
-    paymentImages: pdfData.paymentImages
-  });
+  // ✅ 3️⃣ SYNC STATE
+  setPdfData(quotationForPdf);
+
+  // ✅ 4️⃣ Generate one combined PDF: quotation first, packing slip on next page.
+  await generateQuotationPDF(quotationForPdf);
     
   // OPEN SALES PERSON PERFORMANCE
   localStorage.setItem(
     "selectedSalesPerson",
-    saved.salesPerson || ""
+    saved?.salesPerson || pdfData.salesPerson || ""
   );
 
   // GO TO DASHBOARD

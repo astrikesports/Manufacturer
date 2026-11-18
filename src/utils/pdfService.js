@@ -533,10 +533,15 @@ export async function generateQuotationPDF(
     content
   };
 
-  // Append the packing slip as a new page in the SAME quotation PDF.
-  // It uses the exact quotation data passed to this PDF generator (including server-loaded quotes).
+  // Append the packing slip to this same PDF. Keep this check against the
+  // normalized `items` argument so it works for both new and server-loaded quotes.
   if (Array.isArray(items) && items.length > 0) {
-    docDefinition.content.push(...buildPackingSlipContent(data));
+    docDefinition.content.push(...buildPackingSlipContent({
+      ...data,
+      items,
+      party: data.party || party,
+      quotationNo: data.quotationNo || data.quotation_no || quotationNo
+    }));
   }
 
   // Payment proof page
@@ -580,20 +585,34 @@ export async function generateQuotationPDF(
 function getPackingSizeEntries(sizeValue) {
   if (!sizeValue) return [];
 
-  // Some records may already store a size map instead of a string.
   if (typeof sizeValue === "object" && !Array.isArray(sizeValue)) {
     return Object.entries(sizeValue)
       .map(([size, qty]) => ({ size: String(size).trim(), qty: Number(qty) || 0 }))
       .filter(entry => entry.size && entry.qty > 0);
   }
 
+  if (Array.isArray(sizeValue)) {
+    return sizeValue.map(entry => ({
+      size: String(entry?.size ?? entry?.name ?? "").trim(),
+      qty: Number(entry?.qty ?? entry?.quantity ?? 0) || 0
+    })).filter(entry => entry.size && entry.qty > 0);
+  }
+
   const raw = String(sizeValue).trim();
   if (!raw || raw === "-") return [];
 
+  // Quotation records normally store sizes as "M-2,L-2". Also accept
+  // imported formats such as "M × 2 | L × 2" and JSON-encoded size maps.
+  if ((raw.startsWith("{") && raw.endsWith("}")) || (raw.startsWith("[") && raw.endsWith("]"))) {
+    try {
+      return getPackingSizeEntries(JSON.parse(raw));
+    } catch {
+      // Fall through to the delimited text parser.
+    }
+  }
+
   return raw.split(/[,|]/).map(part => {
     const token = part.trim();
-    // Existing quotation data stores entries as SIZE-QTY (e.g. M-2).
-    // Also accept SIZE x QTY / SIZE × QTY from imported records.
     const match = token.match(/^(.+?)\s*(?:-|×|x|:)\s*(\d+(?:\.\d+)?)$/i);
     return match ? { size: match[1].trim(), qty: Number(match[2]) || 0 } : null;
   }).filter(entry => entry && entry.size && entry.qty > 0);
@@ -613,13 +632,13 @@ function buildPackingSlipContent(data = {}) {
   });
 
   const bodyRows = items.map((item, index) => {
-    const pcs = Number(item.pcs ?? item.totalPcs ?? 0) || 0;
-    const pcsPerBox = Number(item.pcsPerBox ?? item.pcs_per_box ?? item.pcsPerCarton ?? 0) || 0;
+    const pcs = Number(item.pcs ?? item.totalPcs ?? item.total_pcs ?? 0) || 0;
+    const pcsPerBox = Number(item.pcsPerBox ?? item.pcs_per_box ?? item.pcsPerCarton ?? item.pcs_per_carton ?? 0) || 0;
     const boxes = pcsPerBox > 0 ? Math.ceil(pcs / pcsPerBox) : 0;
     totalPcs += pcs;
     totalBoxes += boxes;
 
-    const sizeEntries = getPackingSizeEntries(item.size ?? item.sizeBreakup ?? item.size_breakup);
+    const sizeEntries = getPackingSizeEntries(item.size ?? item.sizeBreakup ?? item.size_breakup ?? item.size_break_up);
     const sizeText = sizeEntries.length
       ? sizeEntries.map(({ size, qty }) => `${size} × ${qty}`).join(" | ")
       : (typeof item.size === "string" && item.size.trim() ? item.size.trim() : "-");
@@ -631,9 +650,9 @@ function buildPackingSlipContent(data = {}) {
 
     return [
       cell(index + 1),
-      cell(item.sku ?? item.code ?? item.desc ?? "-", "left", true),
+      cell(item.sku ?? item.code ?? item.desc ?? item.description ?? "-", "left", true),
       cell(sizeText, "left"),
-      cell(item.MRP ?? item.mrp ?? "-"),
+      cell(item.MRP ?? item.mrp ?? item.mrpPrice ?? item.mrp_price ?? "-"),
       cell(pcs),
       cell(pcsPerBox || "-"),
       cell(boxes || (pcs > 0 ? "—" : "0"))
